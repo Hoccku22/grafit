@@ -1,0 +1,59 @@
+{
+  "name": "grafit-desktop",
+  "productName": "Графит",
+  "version": "0.2.2",
+  "description": "Графит — десктопный редактор заметок в стиле Obsidian",
+  "author": "Hoccku22",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --smoke",
+    "shot": "electron . --smoke --shot=shot.png",
+    "icon": "electron tools/gen-icon.js",
+    "dist": "electron-builder --win",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "ru.grafit.desktop",
+    "productName": "Графит",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*",
+      "build/icon.png",
+      "!tools/**",
+      "!dist/**",
+      "!shot.png",
+      "!grafit.config.json",
+      "!README.md"
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        { "target": "portable", "arch": ["x64"] },
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "portable": {
+      "artifactName": "Графит-${version}-portable.${ext}"
+    },
+    "nsis": {
+      "artifactName": "Графит-${version}-setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Графит"
+    }
+  }
+}

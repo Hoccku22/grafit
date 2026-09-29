@@ -1,10 +1,9 @@
-# Служебные файлы операционных систем — не нужны в репозитории
+# Служебное
 Thumbs.db
 Desktop.ini
 .DS_Store
 
-# Портативный комплект: движок и модели не попадают в git
-# (установятся скриптами desktop/ уже на месте)
-desktop/engine/
-desktop/models/
-desktop/_ollama.zip
+# Сборка программы (папка desktop/)
+desktop/node_modules/
+desktop/dist/
+desktop/shot.png

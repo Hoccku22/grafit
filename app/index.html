@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="«Графит» — локальный редактор заметок в стиле Obsidian: Markdown, вики-ссылки, теги, поиск, граф связей и облачная синхронизация.">
+  <meta name="theme-color" content="#1e1e21">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Графит — заметки в стиле Obsidian">
+  <meta property="og:description" content="Локальный редактор заметок: Markdown, вики-ссылки, граф связей и облачная синхронизация. Открывается прямо в браузере.">
+  <meta property="og:locale" content="ru_RU">
+  <meta name="twitter:card" content="summary">
+  <title>Графит — заметки в стиле Obsidian</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- лента слева -->
+  <aside id="ribbon" aria-label="Основные действия">
+    <div class="ribbon-logo" title="Графит">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2.5 21.5 12 12 21.5 2.5 12z"/><path d="M12 2.5v19M2.5 12h19"/></svg>
+    </div>
+    <button class="ribbon-btn" id="rb-new" title="Новая заметка (Ctrl+N)" aria-label="Новая заметка">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M12 12v6M9 15h6"/></svg>
+    </button>
+    <button class="ribbon-btn" id="rb-folder" title="Новая папка" aria-label="Новая папка">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10.5v5M9.5 13h5"/></svg>
+    </button>
+    <button class="ribbon-btn" id="rb-search" title="Поиск по хранилищу (Ctrl+Shift+F)" aria-label="Поиск">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+    </button>
+    <button class="ribbon-btn" id="rb-graph" title="Граф связей" aria-label="Граф связей">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="6" cy="6" r="2.6"/><circle cx="18" cy="8" r="2.6"/><circle cx="12" cy="18" r="2.6"/><path d="M8.3 7.1l7.3.5M7.4 8.3l3.2 7M16.4 10.3l-2.9 5.7"/></svg>
+    </button>
+    <button class="ribbon-btn" id="rb-cloud" title="Облачная синхронизация" aria-label="Облачная синхронизация">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+    </button>
+    <button class="ribbon-btn" id="rb-ai" title="ИИ-помощник" aria-label="ИИ-помощник">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3l1.3 5.7L17 10l-5.7 1.3L10 17l-1.3-5.7L3 10l5.7-1.3z"/><path d="M19 14.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg>
+    </button>
+    <button class="ribbon-btn bottom" id="rb-theme" title="Сменить тему" aria-label="Сменить тему">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+    <button class="ribbon-btn" id="rb-help" title="О программе и справка" aria-label="О программе">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1.5.9-1.5 1.8v.4"/><circle cx="11.6" cy="17" r="0.7" fill="currentColor"/></svg>
+    </button>
+    <button class="ribbon-btn" id="rb-menu" title="Меню хранилища" aria-label="Меню хранилища">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </aside>
+
+  <!-- панель файлов -->
+  <aside id="sidebar" aria-label="Файлы хранилища">
+    <div class="sb-head">
+      <div class="sb-title">Графит</div>
+      <div class="sb-actions">
+        <button class="mini-btn" id="sb-new-note" title="Новая заметка" aria-label="Новая заметка">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M12 12v6M9 15h6"/></svg>
+        </button>
+        <button class="mini-btn" id="sb-new-folder" title="Новая папка" aria-label="Новая папка">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10.5v5M9.5 13h5"/></svg>
+        </button>
+        <button class="mini-btn" id="sb-collapse" title="Свернуть всё" aria-label="Свернуть всё">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 6 6.5 12l6 6M19 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="sb-tabs" role="tablist">
+      <button class="stab active" data-tab="files" role="tab">Файлы</button>
+      <button class="stab" data-tab="search" role="tab">Поиск</button>
+      <button class="stab" data-tab="tags" role="tab">Теги</button>
+    </div>
+    <div class="sb-body">
+      <div class="tab-panel active" id="tab-files">
+        <div id="file-tree"></div>
+        <div id="trash-zone" class="hidden">
+          <div class="trash-head" id="trash-toggle" role="button" aria-expanded="false">
+            <span>Корзина (<span id="trash-count">0</span>)</span>
+            <span id="trash-caret">▸</span>
+          </div>
+          <div id="trash-list" class="hidden"></div>
+          <div id="trash-actions" class="hidden">
+            <button class="link-btn" id="btn-trash-clear">Очистить корзину</button>
+          </div>
+        </div>
+      </div>
+      <div class="tab-panel" id="tab-search">
+        <input id="search-input" type="search" placeholder="Поиск по заметкам…" aria-label="Поиск по заметкам" autocomplete="off">
+        <div id="search-info"></div>
+        <div id="search-results"></div>
+      </div>
+      <div class="tab-panel" id="tab-tags">
+        <div id="tag-list"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- центр: редактор и просмотр -->
+  <main id="main">
+    <header id="note-header">
+      <div class="nh-title-wrap">
+        <input id="note-title" type="text" aria-label="Название заметки" placeholder="Без названия" autocomplete="off" spellcheck="false">
+        <span id="note-path"></span>
+      </div>
+      <div class="nh-actions">
+        <div id="view-seg" role="group" aria-label="Режим просмотра">
+          <button class="view-mode" data-mode="edit" title="Только редактор (Ctrl+E)">Текст</button>
+          <button class="view-mode" data-mode="split" title="Редактор и просмотр (Ctrl+E)">Два окна</button>
+          <button class="view-mode" data-mode="read" title="Только просмотр (Ctrl+E)">Чтение</button>
+        </div>
+        <button class="icon-btn" id="btn-export-note" title="Скачать заметку (.md)" aria-label="Скачать заметку">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></svg>
+        </button>
+        <button class="icon-btn" id="btn-delete-note" title="Удалить заметку" aria-label="Удалить заметку">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V4.5h5V7M7 7l1 13h8l1-13M10.5 11v6M13.5 11v6"/></svg>
+        </button>
+        <button class="icon-btn" id="btn-toggle-right" title="Инспектор (Ctrl+\)" aria-label="Инспектор">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M14.5 4.5v15"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="toolbar" role="toolbar" aria-label="Форматирование">
+      <button class="tb-btn" data-cmd="bold" title="Жирный (Ctrl+B)">B</button>
+      <button class="tb-btn" data-cmd="italic" title="Курсив (Ctrl+I)">I</button>
+      <button class="tb-btn" data-cmd="strike" title="Зачёркнутый">S</button>
+      <button class="tb-btn" data-cmd="mark" title="Выделение">==</button>
+      <span class="tb-sep"></span>
+      <button class="tb-btn" data-cmd="heading" title="Заголовок">H</button>
+      <button class="tb-btn" data-cmd="quote" title="Цитата">❝</button>
+      <button class="tb-btn" data-cmd="ul" title="Список">•</button>
+      <button class="tb-btn" data-cmd="ol" title="Нумерованный список">1.</button>
+      <button class="tb-btn" data-cmd="task" title="Чек-лист">☑</button>
+      <button class="tb-btn" data-cmd="code" title="Код">‹›</button>
+      <span class="tb-sep"></span>
+      <button class="tb-btn" data-cmd="wikilink" title="Вики-ссылка на заметку">[[ ]]</button>
+      <button class="tb-btn" data-cmd="link" title="Markdown-ссылка">↗</button>
+      <button class="tb-btn" data-cmd="table" title="Таблица">▦</button>
+      <button class="tb-btn" data-cmd="hr" title="Разделитель">—</button>
+    </div>
+
+    <div id="panes" class="mode-split">
+      <div id="editor-pane">
+        <div class="editor-wrap" id="editor-wrap">
+          <div id="editor-overlay" aria-hidden="true"></div>
+          <textarea id="editor" placeholder="Пишите здесь в Markdown…" spellcheck="false" aria-label="Редактор заметки"></textarea>
+          <div id="ai-popup" class="hidden"></div>
+        </div>
+      </div>
+      <div id="pane-divider" role="separator" aria-label="Изменить ширину панелей"></div>
+      <div id="preview-pane">
+        <div id="preview" aria-label="Просмотр заметки"></div>
+      </div>
+      <div id="placeholder" class="hidden">
+        <div class="big">📝</div>
+        <div>Заметка не выбрана</div>
+        <button class="primary-btn" id="placeholder-new">Создать заметку</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- правая панель -->
+  <aside id="rightbar" aria-label="Инспектор">
+    <div class="rb-head">
+      <span>Инспектор</span>
+      <button class="mini-btn" id="rb-close" title="Скрыть панель" aria-label="Скрыть панель">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="rb-block hidden" id="ai-block">
+      <div class="rb-title">ИИ-помощник <span class="badge hidden" id="ai-count">0</span></div>
+      <div class="ai-controls">
+        <button class="ai-btn" id="ai-check">Проверить</button>
+        <button class="ai-btn on" id="ai-auto" title="Автопроверка при наборе">Авто: вкл</button>
+        <button class="ai-btn" id="ai-open-settings" title="Настройки ИИ">Настройки</button>
+      </div>
+      <div id="ai-status-line" class="ai-status-line"></div>
+      <div id="ai-suggestions"></div>
+      <div class="ai-disclaimer">Текст заметок отправляется в выбранный вами сервис ИИ при проверке.</div>
+    </div>
+    <div class="rb-block">
+      <div class="rb-title">Оглавление</div>
+      <div id="outline-list"></div>
+    </div>
+    <div class="rb-block">
+      <div class="rb-title">Обратные ссылки <span class="badge" id="backlinks-count">0</span></div>
+      <div id="backlinks-list"></div>
+    </div>
+    <div class="rb-block">
+      <div class="rb-title">Свойства</div>
+      <div id="note-meta"></div>
+    </div>
+  </aside>
+
+  <!-- строка состояния -->
+  <footer id="statusbar">
+    <div id="status-left">
+      <span id="st-mode">Два окна</span>
+      <span id="st-vault">💾 Локально в браузере</span>
+      <button id="st-reconnect" class="hidden" title="Подключить папку на диске">📁 Подключить папку…</button>
+      <button id="st-sync" class="hidden" title="Проверить изменения в облачной папке">⟳ Синхронизация</button>
+    </div>
+    <div id="status-right">
+      <span id="st-words"></span>
+      <span id="st-chars"></span>
+      <span id="st-links"></span>
+      <span id="st-saved"></span>
+    </div>
+  </footer>
+</div>
+
+<!-- быстрый переход -->
+<div class="modal" id="switcher-modal">
+  <div class="modal-box">
+    <input id="switcher-input" type="text" placeholder="Найти заметку…" autocomplete="off" aria-label="Быстрый переход">
+    <ul id="switcher-list"></ul>
+    <div class="sw-hint">↑ ↓ — навигация · Enter — открыть · Esc — закрыть</div>
+  </div>
+</div>
+
+<!-- граф связей -->
+<div class="modal" id="graph-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <b>Граф связей</b>
+      <span class="sub">каждая связь — вики-ссылка [[…]] между заметками</span>
+      <button class="mini-btn" id="graph-close" title="Закрыть" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div id="graph-wrap">
+      <svg id="graph-svg" viewBox="0 0 920 560" role="img" aria-label="Граф связей заметок"></svg>
+    </div>
+    <div class="graph-legend">
+      <span>● размер — число связей</span>
+      <span>— линия — вики-ссылка</span>
+      <span>клик по узлу — открыть заметку</span>
+    </div>
+  </div>
+</div>
+
+<!-- о программе -->
+<div class="modal" id="about-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <b>О программе</b>
+      <button class="mini-btn" id="about-close" title="Закрыть" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div id="about-body">
+      <p><b>«Графит»</b> — локальный редактор заметок в стиле Obsidian. Работает прямо в браузере, без сервера: данные хранятся только на ваших устройствах.</p>
+      <div class="about-diagram"><img src="assets/architecture.svg" alt="Схема работы редактора" loading="lazy"></div>
+      <h3>Где хранятся заметки</h3>
+      <ul>
+        <li><b>Браузер</b> — по умолчанию, в локальном хранилище (localStorage). Не забудьте про «Скачать резервную копию» в меню «⋯».</li>
+        <li><b>Облако</b> — подключите папку Яндекс.Диска, Google Drive, Dropbox, OneDrive, Nextcloud и других сервисов: приложение пишет .md-файлы, а облачный клиент синхронизирует их между устройствами.</li>
+        <li><b>Папка на диске</b> — обычная папка с .md-файлами (Chrome и Edge). Это и есть режим облачной синхронизации — просто укажите папку облачного клиента.</li>
+      </ul>
+      <button class="primary-btn cloud-cta" id="about-open-cloud">Подключить облако…</button>
+      <h3>Горячие клавиши</h3>
+      <ul>
+        <li><kbd>Ctrl</kbd>+<kbd>N</kbd> — новая заметка</li>
+        <li><kbd>Ctrl</kbd>+<kbd>O</kbd> — быстрый переход</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> — поиск</li>
+        <li><kbd>Ctrl</kbd>+<kbd>E</kbd> — режим просмотра</li>
+        <li><kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>Ctrl</kbd>+<kbd>I</kbd> — жирный / курсив</li>
+        <li><kbd>Ctrl</kbd>+<kbd>\</kbd> — инспектор</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> — проверить текст с ИИ</li>
+      </ul>
+      <p class="about-note">Сочетания работают в любой раскладке — и в русской, и в английской.</p>
+      <h3>О разметке</h3>
+      <p>Поддерживается Markdown, вики-ссылки <b>[[Название]]</b>, теги <b>#тег</b>, чек-листы, таблицы и блоки кода.</p>
+      <h3>ИИ-помощник</h3>
+      <p>Необязательный помощник: подключите любой OpenAI-совместимый сервис (кнопка-искра в левой ленте) — он будет следить за текстом, подсказывать оформление, структуру и формулировки, исправлять опечатки и предлагать определения. Подсказки подсвечиваются прямо в тексте: поставьте курсор на подчёркнутый фрагмент — появится карточка с серым вариантом и кнопкой «Применить». Есть поддержка локальных моделей (Ollama). Работает на GitHub Pages и локально; на превью AutoClaw внешние запросы ограничены.</p>
+      <p class="about-version">Версия 1.9 · мини-Markdown собственной сборки · код открыт, лицензия MIT</p>
+    </div>
+  </div>
+</div>
+
+<!-- подключение облака -->
+<div class="modal" id="cloud-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <b>Облачная синхронизация</b>
+      <button class="mini-btn" id="cloud-close" title="Закрыть" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div id="cloud-body">
+      <div class="cloud-intro">«Графит» пишет обычные .md-файлы в папку на компьютере, а приложение облака само синхронизирует её с вашими устройствами. Пароли, токены и OAuth не нужны — подходит почти любой сервис.</div>
+      <div class="cloud-grid">
+        <button class="cloud-card" data-cloud="yandex"><span class="cloud-name">Яндекс.Диск</span><span class="cloud-hint">папка «Яндекс.Диск»</span></button>
+        <button class="cloud-card" data-cloud="google"><span class="cloud-name">Google Drive</span><span class="cloud-hint">«Мой диск» / My Drive</span></button>
+        <button class="cloud-card" data-cloud="dropbox"><span class="cloud-name">Dropbox</span><span class="cloud-hint">папка Dropbox</span></button>
+        <button class="cloud-card" data-cloud="onedrive"><span class="cloud-name">OneDrive</span><span class="cloud-hint">уже встроен в Windows</span></button>
+        <button class="cloud-card" data-cloud="nextcloud"><span class="cloud-name">Nextcloud</span><span class="cloud-hint">папка Nextcloud</span></button>
+        <button class="cloud-card" data-cloud="other"><span class="cloud-name">Другое облако</span><span class="cloud-hint">MEGA, pCloud, Mail.ru и другие</span></button>
+      </div>
+      <div id="cloud-steps"></div>
+      <div class="cloud-diagram"><img src="assets/cloud-sync.svg" alt="Схема облачной синхронизации" loading="lazy"></div>
+      <div class="cloud-note">Файлы остаются вашими: их можно открывать и править чем угодно — хоть в Obsidian, хоть в блокноте. «Графит» лишь читает и записывает эту папку.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ИИ-помощник: настройки -->
+<div class="modal" id="ai-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <b>ИИ-помощник</b>
+      <button class="mini-btn" id="ai-close" title="Закрыть" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div id="ai-body">
+      <label class="ai-check-row"><input type="checkbox" id="ai-enabled"> <span>Включить ИИ-помощника</span></label>
+      <div class="ai-row"><span class="ai-label">Сервис</span>
+        <select id="ai-provider">
+          <option value="openrouter">OpenRouter (рекомендуется)</option>
+          <option value="openai">OpenAI</option>
+          <option value="groq">Groq</option>
+          <option value="ollama">Ollama (локально)</option>
+          <option value="custom">Другое (OpenAI-совместимый)</option>
+        </select>
+      </div>
+      <div class="ai-row"><span class="ai-label">Адрес API</span><input id="ai-base" type="text" placeholder="https://openrouter.ai/api/v1" autocomplete="off" spellcheck="false"></div>
+      <div class="ai-row"><span class="ai-label">Модель</span><input id="ai-model" type="text" placeholder="openai/gpt-4o-mini" autocomplete="off" spellcheck="false"></div>
+      <div class="ai-row"><span class="ai-label">Ключ API</span><input id="ai-key" type="password" placeholder="Для Ollama не нужен" autocomplete="off"></div>
+      <div class="ai-local hidden" id="ai-local-section">
+        <div class="ai-local-head">Локальная модель (Ollama)</div>
+        <div class="ai-row"><span class="ai-label">Модели</span>
+          <select id="ai-ollama-models"><option value="">— нажмите «Обновить список» —</option></select>
+        </div>
+        <div class="ai-actions"><button class="ai-btn" id="ai-ollama-refresh">Обновить список</button></div>
+        <div class="ai-row"><span class="ai-label">Скачать</span>
+          <select id="ai-ollama-catalog">
+            <option value="qwen2.5:1.5b">qwen2.5:1.5b — рекомендуемая, ≈1 ГБ</option>
+            <option value="qwen3:1.7b">qwen3:1.7b — поумнее, ≈1.4 ГБ</option>
+            <option value="gemma3:1b">gemma3:1b — самая лёгкая, ≈0.8 ГБ</option>
+            <option value="gemma2:2b">gemma2:2b — от Google, ≈1.6 ГБ</option>
+            <option value="llama3.2:3b">llama3.2:3b — от Meta, ≈2 ГБ</option>
+          </select>
+        </div>
+        <div class="ai-row"><span class="ai-label">Свой тег</span><input id="ai-ollama-custom" type="text" placeholder="например, mistral:7b" autocomplete="off" spellcheck="false"></div>
+        <div class="ai-actions"><button class="primary-btn" id="ai-ollama-pull">Скачать модель</button></div>
+        <div id="ai-pull-wrap" class="ai-progress hidden"><div id="ai-pull-bar" class="ai-progress-bar"></div></div>
+        <div id="ai-ollama-progress" class="ai-status-line"></div>
+        <div class="ai-note">Локальные модели работают без интернета и без ключей. Установите Ollama с сайта ollama.com и запустите её. Чтобы браузер мог к ней обращаться, разрешите запросы: выполните в PowerShell <code>[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS","*","User")</code> и перезапустите Ollama. Затем выберите модель и нажмите «Скачать» — всё загрузится прямо отсюда.</div>
+      </div>
+      <div class="ai-actions">
+        <button class="ai-btn" id="ai-test">Проверить соединение</button>
+        <button class="primary-btn" id="ai-save">Сохранить</button>
+      </div>
+      <div id="ai-form-status" class="ai-status-line"></div>
+      <div class="ai-note">
+        Подойдёт любой сервис с OpenAI-совместимым API: OpenRouter (есть бесплатные модели), OpenAI, Groq, локальный Ollama и другие.
+        Ключ хранится только в этом браузере. Текст заметок отправляется выбранному сервису при проверке.
+        Для локальной модели (Ollama) ключ не нужен — раздел появится при выборе сервиса «Ollama».
+        На предпросмотре AutoClaw внешние запросы блокируются политикой хостинга — ИИ полностью работает в версии на GitHub Pages или локально.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- меню хранилища -->
+<div id="menu-popover" class="hidden" role="menu">
+  <button class="menu-item" data-act="open-cloud">Подключить облако или папку… <span class="mi-hint">синхронизация</span></button>
+  <button class="menu-item" data-act="sync-check">Проверить синхронизацию</button>
+  <button class="menu-item" data-act="rescan">Перечитать папку заново</button>
+  <button class="menu-item" data-act="ai">ИИ-помощник… <span class="mi-hint">настройки</span></button>
+  <div class="menu-sep"></div>
+  <button class="menu-item" data-act="export-json">Скачать резервную копию (JSON)</button>
+  <button class="menu-item" data-act="import-json">Импорт из JSON…</button>
+  <button class="menu-item" data-act="import-md">Импорт .md файлов…</button>
+  <div class="menu-sep"></div>
+  <button class="menu-item danger" data-act="reset">Сбросить хранилище…</button>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+<input type="file" id="file-json" accept=".json,application/json" class="hidden">
+<input type="file" id="file-md" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple class="hidden">
+
+<script src="assets/markdown.js"></script>
+<script src="assets/seeds.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

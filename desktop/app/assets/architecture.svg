@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 880" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b7bf7"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="880" rx="20" fill="#17171b"/>
+  <rect x="0.5" y="0.5" width="1599" height="879" rx="20" fill="none" stroke="#2e2e35"/>
+
+  <text x="60" y="72" font-size="30" font-weight="700" fill="#e8e8ee">«Графит» — как это устроено</text>
+  <text x="60" y="106" font-size="15" fill="#9a9aa3">Локальный редактор заметок в стиле Obsidian: без сервера и внешних зависимостей. Облако — по желанию, через папку облачного клиента.</text>
+
+  <!-- Конвейер -->
+  <g>
+    <rect x="120" y="150" width="290" height="74" rx="14" fill="#1f1f26" stroke="#33333c"/>
+    <text x="265" y="182" font-size="16" font-weight="600" fill="#dcdce2" text-anchor="middle">Редактор</text>
+    <text x="265" y="205" font-size="12.5" fill="#8a8a94" text-anchor="middle">textarea + панель инструментов</text>
+
+    <line x1="414" y1="187" x2="446" y2="187" stroke="#8b7bf7" stroke-opacity="0.8" stroke-width="2" marker-end="url(#arr)"/>
+
+    <rect x="450" y="150" width="270" height="74" rx="14" fill="#1f1f26" stroke="#33333c"/>
+    <text x="585" y="182" font-size="16" font-weight="600" fill="#dcdce2" text-anchor="middle">Мини-Markdown</text>
+    <text x="585" y="205" font-size="12.5" fill="#8a8a94" text-anchor="middle">собственный парсер</text>
+
+    <line x1="724" y1="187" x2="756" y2="187" stroke="#8b7bf7" stroke-opacity="0.8" stroke-width="2" marker-end="url(#arr)"/>
+
+    <rect x="760" y="150" width="270" height="74" rx="14" fill="#1f1f26" stroke="#33333c"/>
+    <text x="895" y="182" font-size="16" font-weight="600" fill="#dcdce2" text-anchor="middle">Живой просмотр</text>
+    <text x="895" y="205" font-size="12.5" fill="#8a8a94" text-anchor="middle">HTML справа от текста</text>
+
+    <line x1="1034" y1="187" x2="1066" y2="187" stroke="#8b7bf7" stroke-opacity="0.8" stroke-width="2" marker-end="url(#arr)"/>
+
+    <rect x="1070" y="150" width="380" height="74" rx="14" fill="#1f1f26" stroke="#33333c"/>
+    <text x="1260" y="182" font-size="16" font-weight="600" fill="#dcdce2" text-anchor="middle">Индексация</text>
+    <text x="1260" y="205" font-size="12.5" fill="#8a8a94" text-anchor="middle">вики-ссылки · #теги · чек-листы</text>
+  </g>
+
+  <!-- Колонка: Интерфейс -->
+  <g>
+    <rect x="60" y="300" width="460" height="480" rx="16" fill="#1c1c22" stroke="#33333c"/>
+    <text x="84" y="342" font-size="18" font-weight="700" fill="#dcdce2">Интерфейс</text>
+    <line x1="84" y1="358" x2="496" y2="358" stroke="#33333c"/>
+
+    <rect x="84" y="380" width="412" height="56" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="108" y="404" font-size="14.5" fill="#dcdce2">Лента действий</text>
+    <text x="108" y="424" font-size="12" fill="#8a8a94">новая заметка · поиск · граф · тема · меню</text>
+
+    <rect x="84" y="450" width="412" height="56" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="108" y="474" font-size="14.5" fill="#dcdce2">Дерево хранилища</text>
+    <text x="108" y="494" font-size="12" fill="#8a8a94">папки, заметки, переименование, корзина</text>
+
+    <rect x="84" y="520" width="412" height="56" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="108" y="544" font-size="14.5" fill="#dcdce2">Редактор и просмотр</text>
+    <text x="108" y="564" font-size="12" fill="#8a8a94">режимы: текст · два окна · чтение</text>
+
+    <rect x="84" y="590" width="412" height="56" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="108" y="614" font-size="14.5" fill="#dcdce2">Инспектор</text>
+    <text x="108" y="634" font-size="12" fill="#8a8a94">оглавление, обратные ссылки, свойства</text>
+
+    <rect x="84" y="660" width="412" height="56" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="108" y="684" font-size="14.5" fill="#dcdce2">Диалоги</text>
+    <text x="108" y="704" font-size="12" fill="#8a8a94">быстрый переход Ctrl+O и граф связей</text>
+  </g>
+
+  <!-- Колонка: Ядро -->
+  <g>
+    <rect x="570" y="300" width="460" height="480" rx="16" fill="#1c1c22" stroke="#33333c"/>
+    <text x="594" y="342" font-size="18" font-weight="700" fill="#dcdce2">Ядро приложения</text>
+    <line x1="594" y1="358" x2="1006" y2="358" stroke="#33333c"/>
+
+    <rect x="594" y="380" width="412" height="56" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="618" y="404" font-size="14.5" fill="#dcdce2">Состояние</text>
+    <text x="618" y="424" font-size="12" fill="#8a8a94">заметки, папки и корзина в памяти</text>
+
+    <rect x="594" y="450" width="412" height="56" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="618" y="474" font-size="14.5" fill="#dcdce2">Автосохранение</text>
+    <text x="618" y="494" font-size="12" fill="#8a8a94">запись с задержкой — кнопка «Сохранить» не нужна</text>
+
+    <rect x="594" y="520" width="412" height="56" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="618" y="544" font-size="14.5" fill="#dcdce2">Индексатор</text>
+    <text x="618" y="564" font-size="12" fill="#8a8a94">вики-ссылки, теги, чек-листы, оглавление</text>
+
+    <rect x="594" y="590" width="412" height="56" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="618" y="614" font-size="14.5" fill="#dcdce2">Движок связей</text>
+    <text x="618" y="634" font-size="12" fill="#8a8a94">обратные ссылки и граф связей</text>
+
+    <rect x="594" y="660" width="412" height="56" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="618" y="684" font-size="14.5" fill="#dcdce2">Экспорт и импорт</text>
+    <text x="618" y="704" font-size="12" fill="#8a8a94">резервная копия JSON и .md-файлы</text>
+  </g>
+
+  <!-- Колонка: Хранилище -->
+  <g>
+    <rect x="1080" y="300" width="460" height="480" rx="16" fill="#1c1c22" stroke="#33333c"/>
+    <text x="1104" y="342" font-size="18" font-weight="700" fill="#dcdce2">Хранилище</text>
+    <line x1="1104" y1="358" x2="1516" y2="358" stroke="#33333c"/>
+
+    <rect x="1104" y="380" width="412" height="120" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="1128" y="412" font-size="15" font-weight="600" fill="#dcdce2">Браузер</text>
+    <text x="1128" y="436" font-size="12" fill="#8a8a94">localStorage — снимок хранилища (JSON)</text>
+    <text x="1128" y="458" font-size="12" fill="#8a8a94">режим по умолчанию</text>
+    <text x="1128" y="484" font-size="12" fill="#6f6f78">резервная копия — в меню «⋯»</text>
+
+    <rect x="1104" y="510" width="412" height="160" rx="10" fill="#1f1f26" stroke="#33333c"/>
+    <text x="1128" y="542" font-size="15" font-weight="600" fill="#dcdce2">Папка на диске</text>
+    <text x="1128" y="566" font-size="12" fill="#8a8a94">обычные .md-файлы в вашей папке</text>
+    <text x="1128" y="588" font-size="12" fill="#8a8a94">File System Access API · Chrome / Edge</text>
+    <text x="1128" y="610" font-size="12" fill="#8a8a94">правки сохраняются прямо в файлы</text>
+    <text x="1128" y="642" font-size="12" fill="#6f6f78">сюда же подключается облачная папка</text>
+
+    <text x="1330" y="740" font-size="12.5" fill="#8a8a94" text-anchor="middle">Облако: Яндекс.Диск, Google Drive, Dropbox, OneDrive…</text>
+  </g>
+
+  <!-- Стрелки между колонками -->
+  <g>
+    <line x1="528" y1="452" x2="562" y2="452" stroke="#8b7bf7" stroke-opacity="0.8" stroke-width="2" marker-end="url(#arr)"/>
+    <text x="545" y="440" font-size="11.5" fill="#8a8a94" text-anchor="middle">изменения</text>
+
+    <line x1="562" y1="588" x2="528" y2="588" stroke="#8b7bf7" stroke-opacity="0.8" stroke-width="2" marker-end="url(#arr)"/>
+    <text x="545" y="576" font-size="11.5" fill="#8a8a94" text-anchor="middle">панели</text>
+
+    <line x1="1038" y1="452" x2="1072" y2="452" stroke="#8b7bf7" stroke-opacity="0.8" stroke-width="2" marker-end="url(#arr)"/>
+    <text x="1055" y="440" font-size="11.5" fill="#8a8a94" text-anchor="middle">сохранить</text>
+
+    <line x1="1072" y1="588" x2="1038" y2="588" stroke="#8b7bf7" stroke-opacity="0.8" stroke-width="2" marker-end="url(#arr)"/>
+    <text x="1055" y="576" font-size="11.5" fill="#8a8a94" text-anchor="middle">загрузить</text>
+  </g>
+
+  <text x="800" y="850" font-size="13" fill="#6f6f78" text-anchor="middle">«Графит» · локальный редактор заметок в стиле Obsidian · версия 1.6</text>
+</svg>

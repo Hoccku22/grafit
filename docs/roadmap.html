@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Графит — ближайший роадмап</title>
+<title>Графит — роадмап с оценками важности и сложности</title>
 <style>
   :root{
     --bg:#0e0e11; --panel:#161619; --panel2:#1b1b1f; --border:#2a2a31;
@@ -13,18 +13,20 @@
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--text)}
   body{font:16px/1.65 "Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:980px;margin:0 auto;padding:56px 28px 72px}
+  .wrap{max-width:1000px;margin:0 auto;padding:56px 28px 72px}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
 
   .eyebrow{font:600 12px/1 "Segoe UI",sans-serif;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:10px}
   .eyebrow svg{width:18px;height:18px}
   h1{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:44px;line-height:1.15;margin:18px 0 10px;letter-spacing:-.01em}
   .sub{color:var(--dim);font-size:15px}
   .sub b{color:var(--text);font-weight:600}
-  .intro{margin-top:26px;color:var(--dim);max-width:70ch}
+  .intro{margin-top:24px;color:var(--dim);max-width:74ch}
   .intro b{color:var(--text)}
 
-  h2{font-family:Georgia,serif;font-size:24px;margin:0 0 6px}
-  .sec{margin-top:56px}
+  h2{font-family:Georgia,serif;font-size:25px;margin:0 0 6px}
+  .sec{margin-top:54px}
   .sec-note{color:var(--muted);font-size:13.5px;margin-bottom:20px}
 
   .done-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
@@ -33,44 +35,60 @@
   .done-card p{color:var(--dim);font-size:13.5px;line-height:1.55}
   .tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:999px;margin-bottom:10px}
   .tag-done{background:rgba(83,201,139,.14);color:var(--green)}
-  .tag-next{background:rgba(139,123,247,.16);color:var(--accent)}
-  .tag-big{background:rgba(226,179,92,.14);color:var(--amber)}
-  .tag-later{background:rgba(123,123,132,.16);color:var(--muted)}
 
-  .tl{margin-top:18px;border-left:2px solid var(--border);padding-left:0;list-style:none}
-  .tl li{position:relative;padding:0 0 26px 26px}
-  .tl li::before{content:"";position:absolute;left:-7px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--panel2);border:2px solid var(--border)}
-  .tl li.now::before{border-color:var(--accent);background:var(--accent)}
-  .tl li.big::before{border-color:var(--amber)}
-  .tl li.later::before{border-color:var(--muted)}
-  .tl h3{font-size:16px;margin:0 0 4px}
-  .tl p{color:var(--dim);font-size:14px;max-width:74ch}
-  .tl p b{color:var(--text);font-weight:600}
-  .tl .why{color:var(--muted);font-size:12.5px;margin-top:4px}
+  /* карта приоритетов */
+  .quad-wrap{display:grid;grid-template-columns:26px 1fr;grid-template-rows:26px 1fr 26px;gap:6px;margin-top:6px}
+  .q-y{grid-row:2;grid-column:1;writing-mode:vertical-rl;transform:rotate(180deg);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;letter-spacing:.04em}
+  .q-top{grid-row:1;grid-column:2;text-align:center;color:var(--muted);font-size:12px;letter-spacing:.04em}
+  .q-x{grid-row:3;grid-column:2;display:flex;justify-content:space-between;color:var(--muted);font-size:12px;letter-spacing:.04em}
+  .quad{grid-row:2;grid-column:2;position:relative;height:330px;border:1px solid var(--border);border-radius:14px;background:var(--panel);overflow:hidden}
+  .quad::before,.quad::after{content:"";position:absolute;background:var(--border-soft,#232329)}
+  .quad::before{left:50%;top:8%;bottom:8%;width:1px}
+  .quad::after{top:50%;left:8%;right:8%;height:1px}
+  .qcell{position:absolute;color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;opacity:.75}
+  .qcell.tl{left:14px;top:10px}
+  .qcell.tr{right:14px;top:10px}
+  .qcell.bl{left:14px;bottom:10px}
+  .qcell.br{right:14px;bottom:10px}
+  .dot{position:absolute;transform:translate(-50%,-50%)}
+  .dot .dd{width:26px;height:26px;border-radius:50%;background:var(--panel2);border:2px solid var(--accent);color:var(--text);font:700 12.5px/22px "Segoe UI",sans-serif;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  .dot.imp-high .dd{border-color:var(--accent)}
+  .dot.imp-mid .dd{border-color:var(--amber)}
+  .dot .lbl{position:absolute;left:50%;top:30px;transform:translateX(-50%);white-space:nowrap;font-size:11px;color:var(--dim);background:rgba(14,14,17,.72);padding:1px 6px;border-radius:6px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;color:var(--muted);font-size:12.5px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:baseline}
+  .legend .hi{background:var(--accent)} .legend .mi{background:var(--amber)}
 
-  .callout{margin-top:34px;background:linear-gradient(180deg,rgba(230,106,92,.07),rgba(230,106,92,.02));border:1px solid rgba(230,106,92,.35);border-radius:12px;padding:16px 18px}
-  .callout h3{font-size:15px;margin-bottom:6px;color:var(--red)}
-  .callout p{color:var(--dim);font-size:13.5px;max-width:78ch}
-  .callout p+p{margin-top:6px}
+  /* таблица */
+  .tbl{width:100%;border-collapse:collapse;margin-top:8px;font-size:13.5px}
+  .tbl th{color:var(--muted);font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;text-align:left;padding:9px 10px;border-bottom:1px solid var(--border)}
+  .tbl td{padding:11px 10px;border-bottom:1px solid var(--border-soft,#232329);vertical-align:top;color:var(--dim)}
+  .tbl td:first-child{color:var(--muted);font-weight:700;width:28px}
+  .tbl td b{color:var(--text);font-weight:600}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:2.5px 9px;border-radius:999px;white-space:nowrap}
+  .p-high{background:rgba(139,123,247,.16);color:#b3a7ff}
+  .p-mid{background:rgba(226,179,92,.15);color:var(--amber)}
+  .p-low{background:rgba(110,168,254,.14);color:var(--blue)}
+  .s-low{background:rgba(83,201,139,.13);color:var(--green)}
+  .s-mid{background:rgba(226,179,92,.15);color:var(--amber)}
+  .s-high{background:rgba(230,106,92,.14);color:var(--red)}
+  .order-note{margin-top:16px;background:linear-gradient(180deg,rgba(139,123,247,.06),rgba(139,123,247,.02));border:1px solid rgba(139,123,247,.28);border-radius:12px;padding:14px 16px;color:var(--dim);font-size:13.5px}
+  .order-note b{color:var(--text)}
 
   .principles{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}
   .pr{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:13px 15px;font-size:13.5px;color:var(--dim)}
   .pr b{display:block;color:var(--text);font-size:13.5px;margin-bottom:2px}
 
-  footer{margin-top:60px;border-top:1px solid var(--border);padding-top:20px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
-  footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--border)}
-  footer a:hover{color:var(--text)}
-  code{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:1px 6px;font:12.5px/1.4 Consolas,monospace;color:var(--text)}
+  footer{margin-top:56px;border-top:1px solid var(--border);padding-top:20px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
 
   @media (max-width:760px){
     h1{font-size:32px}
-    .done-grid{grid-template-columns:1fr}
-    .principles{grid-template-columns:1fr}
+    .done-grid,.principles{grid-template-columns:1fr}
+    .quad{height:430px}
   }
   @media print{
     body{background:#fff;color:#111}
-    .done-card,.pr{background:#fff;border-color:#ddd}
-    .sub,.intro,.tl p,.pr,.callout p{color:#333}
+    .done-card,.pr,.quad,.order-note{background:#fff;border-color:#ddd}
   }
 </style>
 </head>
@@ -81,83 +99,119 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2.5 21.5 12 12 21.5 2.5 12z"/><path d="M12 2.5v19M2.5 12h19"/></svg>
     Графит · план развития
   </div>
-  <h1>Ближайший роадмап</h1>
-  <div class="sub">Версия <b>0.2.1</b> (сайт: <b>1.8</b>) · 29 сентября 2026 · заметки в стиле Obsidian, которые живут в ваших файлах</div>
+  <h1>Роадмап с оценками</h1>
+  <div class="sub">Версия <b>0.2.2</b> (сайт: <b>1.10</b>) · 29 сентября 2026 · <b>важность</b> отвечает на вопрос «насколько это нужно», <b>сложность</b> — «сколько работы»</div>
 
-  <p class="intro">Это не обещание «когда-нибудь», а честный порядок работ: сначала то, что усиливает главное преимущество «Графита» — <b>скорость мысли и полный контроль над файлами</b>. Ниже: что уже выпущено сегодня и что делаем следующим.</p>
+  <p class="intro">Порядок работ строится по простому правилу: сначала <b>важное и недорогое</b>, потом важное и крупное, затем всё остальное. Ниже — карта приоритетов, оценки по каждому пункту и рекомендуемая последовательность.</p>
 
   <section class="sec">
-    <h2>Выпущено в этой сборке</h2>
-    <div class="sec-note">Сегодняшний небольшой релиз — про нативность и надёжность.</div>
+    <h2>Выпущено в 0.2.x</h2>
+    <div class="sec-note">Последние три сборки программы — про надёжность и аккуратность.</div>
     <div class="done-grid">
       <div class="done-card">
         <span class="tag tag-done">сделано</span>
-        <h3>Фирменные диалоги</h3>
-        <p>Все системные окна заменены диалогами в стиле «Графита»: удаление, очистка корзины, сброс, перечитывание папки. Тёмная и светлая тема, клавиши Enter и Escape, единый вид на сайте и в приложении.</p>
+        <h3>Фирменные диалоги и меню</h3>
+        <p>Все системные окна заменены диалогами в стиле «Графита». Меню хранилища теперь всегда помещается в окно любого размера.</p>
       </div>
       <div class="done-card">
         <span class="tag tag-done">сделано</span>
         <h3>Клавиши в любой раскладке</h3>
-        <p>Ctrl+N, Ctrl+O, Ctrl+B и остальные сочетания работают и на русской, и на английской раскладке — раньше на ЙЦУКЕН они не срабатывали.</p>
+        <p>Ctrl+N, Ctrl+O, Ctrl+B и остальные сочетания работают и на русской, и на английской раскладке.</p>
       </div>
       <div class="done-card">
         <span class="tag tag-done">сделано</span>
         <h3>Защита правок</h3>
-        <p>Приложение не открывает две копии окна на одно хранилище (второй запуск показывает уже открытое), потерянный редактор восстанавливает ввод в новую заметку, несохранённое записывается при закрытии.</p>
+        <p>Одно окно на хранилище, восстановление ввода, запись при закрытии — правки больше не теряются.</p>
       </div>
     </div>
   </section>
 
   <section class="sec">
-    <h2>Шаги впереди</h2>
-    <div class="sec-note">Порядок соответствует пользе: сверху — то, что почувствуется сразу.</div>
-    <ul class="tl">
-      <li class="now">
-        <span class="tag tag-next">следующий шаг</span>
-        <h3>Мгновенный отклик папки (автоподхват изменений)</h3>
-        <p>Если файл изменился в облаке или в другой программе — «Графит» подхватит это <b>сразу</b>, не дожидаясь переключения окна. Сейчас папка проверяется при возврате к окну и по кнопке.</p>
-        <div class="why">Почему первым: это главный сценарий «телефон ↔ компьютер» через облако.</div>
-      </li>
-      <li class="now">
-        <span class="tag tag-next">следующий шаг</span>
-        <h3>Быстрая заметка из любого места Windows</h3>
-        <p>Значок в трее и глобальная горячая клавиша: нажали — всплыло маленькое окно, записали мысль, оно спряталось. Идеально, чтобы «поймать» идею, не разворачивая редактор.</p>
-        <div class="why">Почему вторым: заметки живут между делом, а не только когда открыт редактор.</div>
-      </li>
-      <li class="big">
-        <span class="tag tag-big">крупный шаг</span>
-        <h3>Новый движок редактора — подсказки ИИ прямо в строке</h3>
-        <p>Переведём редактор на CodeMirror и включим <b>настоящие подсказки по ходу письма</b>: серый «призрачный» текст, который принимается клавишей Tab, а не всплывающим списком. Плюс номера строк, сворачивание блоков и аккуратное выделение синтаксиса.</p>
-        <div class="why">Почему крупный: это заменит слой подсветки из версии 1.6 на полноценный редакторный опыт.</div>
-      </li>
-      <li class="later">
-        <span class="tag tag-later">дальше</span>
-        <h3>История версий заметки</h3>
-        <p>Не только корзина: посмотреть, что и когда менялось, и вернуть прежнюю версию одним нажатием.</p>
-      </li>
-      <li class="later">
-        <span class="tag tag-later">дальше</span>
-        <h3>Вложения</h3>
-        <p>Картинки и файлы прямо в заметках: вставка из буфера, перетаскивание, превью. Файлы кладутся рядом с заметками — всё так же остаётся вашим.</p>
-      </li>
-      <li class="later">
-        <span class="tag tag-later">дальше</span>
-        <h3>Поделиться заметкой</h3>
-        <p>Одна кнопка — и заметка превращается в аккуратную веб-страницу для отправки по ссылке.</p>
-      </li>
-      <li class="later">
-        <span class="tag tag-later">дальше</span>
-        <h3>Мобильный «Графит»</h3>
-        <p>Те же файлы через облачную папку — с телефона: читать, дописывать, искать. Мобильное веб-приложение (PWA), без отдельного аккаунта.</p>
-      </li>
-    </ul>
+    <h2>Карта приоритетов</h2>
+    <div class="sec-note">Чем выше и левее — тем раньше браться. Номера соответствуют таблице ниже.</div>
+    <div class="quad-wrap">
+      <div class="q-top">▲ важность выше</div>
+      <div class="q-y">В А Ж Н О С Т Ь</div>
+      <div class="quad">
+        <div class="qcell tl">быстрые победы</div>
+        <div class="qcell tr">крупные шаги</div>
+        <div class="qcell bl">небольшие улучшения</div>
+        <div class="qcell br">позже</div>
+        <span class="dot imp-high" style="left:21%;top:24%"><span class="dd">1</span><span class="lbl">Быстрая заметка</span></span>
+        <span class="dot imp-high" style="left:58%;top:30%"><span class="dd">2</span><span class="lbl">Отклик папки</span></span>
+        <span class="dot imp-high" style="left:82%;top:16%"><span class="dd">3</span><span class="lbl">Подсказки в строке</span></span>
+        <span class="dot imp-mid" style="left:24%;top:62%"><span class="dd">4</span><span class="lbl">Поделиться ссылкой</span></span>
+        <span class="dot imp-mid" style="left:62%;top:60%"><span class="dd">5</span><span class="lbl">История версий</span></span>
+        <span class="dot imp-mid" style="left:72%;top:44%"><span class="dd">6</span><span class="lbl">Вложения</span></span>
+        <span class="dot imp-mid" style="left:86%;top:78%"><span class="dd">7</span><span class="lbl">Мобильный Графит</span></span>
+      </div>
+      <div class="q-x"><span>◀ проще</span><span>сложнее ▶</span></div>
+    </div>
+    <div class="legend">
+      <span><i class="hi"></i>высокая важность</span>
+      <span><i class="mi"></i>средняя важность</span>
+    </div>
   </section>
 
-  <div class="callout">
-    <h3>Отдельная тема: «после удаления не получается менять заметки»</h3>
-    <p>Автотесты прошли полный сценарий (правка → удаление → правка в обоих режимах, включая реальные клики и ввод) — ошибку не воспроизвели. Но добавили три защиты, которые закрывают самые вероятные причины: запрет двух окон на одно хранилище, самовосстановление ввода и запись при закрытии.</p>
-    <p>Если такое повторится на новой версии — просто напишите, что делали перед этим: шаги помогут найти причину окончательно.</p>
-  </div>
+  <section class="sec">
+    <h2>Оценки по пунктам</h2>
+    <div class="sec-note">Рекомендуемый порядок — сверху вниз: сначала важное и недорогое, затем крупные вложения.</div>
+    <table class="tbl">
+      <tr><th>#</th><th>Обновление</th><th>Что даёт</th><th>Важность</th><th>Сложность</th></tr>
+      <tr>
+        <td>1</td>
+        <td><b>Быстрая заметка из любого места</b></td>
+        <td>Значок в трее и глобальная горячая клавиша: нажал в любой программе — всплыло мини-окно, записал мысль, спрятал. Самый частый сценарий «поймать идею».</td>
+        <td><span class="pill p-high">высокая</span></td>
+        <td><span class="pill s-low">низкая</span></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><b>Мгновенный отклик папки</b></td>
+        <td>Изменения файлов в облаке или другой программе подхватываются сразу, а не при возврате к окну. Убирает единственное ручное действие в синхронизации.</td>
+        <td><span class="pill p-high">высокая</span></td>
+        <td><span class="pill s-mid">средняя</span></td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><b>Подсказки ИИ прямо в строке</b></td>
+        <td>Новый движок редактора (CodeMirror): серые «призрачные» подсказки, которые принимаются клавишей Tab, номера строк, сворачивание блоков. Самая заметная, но и самая крупная работа.</td>
+        <td><span class="pill p-high">высокая</span></td>
+        <td><span class="pill s-high">высокая</span></td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><b>Поделиться заметкой ссылкой</b></td>
+        <td>Экспорт заметки в аккуратную веб-страницу и короткая ссылка для отправки. Дёшево сделать, приятно иметь.</td>
+        <td><span class="pill p-mid">средняя</span></td>
+        <td><span class="pill s-low">низкая</span></td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><b>История версий заметки</b></td>
+        <td>Посмотреть, что менялось, и вернуть прежнюю редакцию одним нажатием — глубже, чем корзина.</td>
+        <td><span class="pill p-mid">средняя</span></td>
+        <td><span class="pill s-mid">средняя</span></td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><b>Вложения</b></td>
+        <td>Картинки и файлы прямо в заметках: вставка из буфера, перетаскивание, превью. Файлы кладутся рядом с заметками.</td>
+        <td><span class="pill p-mid">средняя</span></td>
+        <td><span class="pill s-mid">средняя</span></td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td><b>Мобильный «Графит» (PWA)</b></td>
+        <td>Те же файлы через облачную папку — с телефона: читать, дописывать, искать. Отдельная адаптация интерфейса под маленькие экраны.</td>
+        <td><span class="pill p-mid">средняя</span></td>
+        <td><span class="pill s-high">высокая</span></td>
+      </tr>
+    </table>
+    <div class="order-note">
+      <b>Рекомендуемый порядок:</b> сначала пункты 1–2 (быстрые победы, ощущаются сразу), затем 3 (крупный шаг, ради которого всё затевалось), после — 4–7 по мере интереса. Оценки можно пересматривать: роадмап живой.
+    </div>
+  </section>
 
   <section class="sec">
     <h2>Принципы, которые не меняются</h2>
@@ -170,8 +224,8 @@
   </section>
 
   <footer>
-    <span>«Графит» · заметки в стиле Obsidian</span>
-    <span><a href="https://hoccku22.github.io/grafit/">Веб-версия</a> · <a href="https://github.com/Hoccku22/grafit">Репозиторий</a></span>
+    <span>«Графит» · роадмап · 29.09.2026</span>
+    <span><a href="https://github.com/Hoccku22/grafit">Репозиторий</a> · <a href="https://github.com/Hoccku22/grafit/releases/latest">Скачать</a> · <a href="../app/">Веб-версия</a></span>
   </footer>
 
 </div>
