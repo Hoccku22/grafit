@@ -32,7 +32,7 @@ if (-not $running) {
   $env:OLLAMA_ORIGINS = '*'
   $env:OLLAMA_HOST = '127.0.0.1:11434'
   Start-Process -FilePath $exe -ArgumentList 'serve' -WorkingDirectory $desk -WindowStyle Hidden
-  for ($i = 0; $i -lt 40; $i++) {
+  for ($i = 0; $i -lt 120; $i++) {
     Start-Sleep -Milliseconds 500
     if (Test-Ollama) { break }
   }
@@ -42,7 +42,7 @@ if (-not $running) {
 if ($running) {
   Write-Host 'Движок работает. Открываю «Графит»…'
 } else {
-  Write-Host 'Движок не ответил за 20 секунд — проверьте вручную.'
+  Write-Host 'Движок не ответил за 60 секунд — запустите ещё раз или проверьте вручную.'
 }
 
 Start-Process $app
