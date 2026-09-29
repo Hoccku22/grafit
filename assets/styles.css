@@ -601,6 +601,51 @@ input, textarea { font-family: inherit; }
 #about-body .about-diagram { margin: 12px 0; border: 1px solid var(--border-soft); border-radius: 10px; overflow: hidden; background: var(--bg); }
 #about-body .about-diagram img { display: block; width: 100%; }
 #about-body .about-version { color: var(--muted); font-size: 12px; margin-top: 14px; }
+.about-note { color: var(--muted); font-size: 12.5px; margin: 2px 0 12px; }
+
+/* ---------------- Фирменные диалоги (вместо системных окон) ---------------- */
+
+.gd-layer {
+  position: fixed; inset: 0; z-index: 260;
+  background: rgba(8, 8, 12, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.gd-box {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  width: min(440px, 92vw);
+  padding: 16px 18px 14px;
+  outline: none;
+}
+.gd-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.gd-ic { display: flex; flex: 0 0 auto; color: var(--accent); }
+.gd-ic svg { width: 18px; height: 18px; }
+.gd-box.danger .gd-ic { color: var(--danger); }
+.gd-title { flex: 1 1 auto; min-width: 0; font-size: 14.5px; font-weight: 650; color: var(--text); }
+.gd-close {
+  flex: 0 0 auto; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; color: var(--muted);
+}
+.gd-close:hover { background: var(--bg-soft); color: var(--text); }
+.gd-close svg { width: 15px; height: 15px; }
+.gd-body { font-size: 13.5px; color: var(--text-dim); line-height: 1.6; padding-bottom: 2px; }
+.gd-body p { margin: 0 0 8px; }
+.gd-body p:last-child { margin-bottom: 2px; }
+.gd-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.gd-btn {
+  padding: 8px 16px; border-radius: 9px;
+  font-size: 13px; font-weight: 600;
+  border: 1px solid var(--border); color: var(--text-dim);
+}
+.gd-btn:hover { background: var(--bg-soft); color: var(--text); }
+.gd-btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+.gd-btn.primary:hover { background: var(--accent); color: #fff; filter: brightness(1.1); }
+.gd-btn.danger { background: var(--danger); border-color: transparent; color: #fff; }
+.gd-btn.danger:hover { background: var(--danger); color: #fff; filter: brightness(1.08); }
 
 /* ---------------- Облачная синхронизация ---------------- */
 

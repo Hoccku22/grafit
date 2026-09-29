@@ -567,7 +567,12 @@
       return;
     }
     if (!manual) return;
-    if (!confirm('Перечитать папку заново?\n\nВсё будет считано из файлов; несохранённые правки сначала сохранятся.')) return;
+    var reloadOk = await gdConfirm({
+      title: 'Перечитать папку?',
+      lines: ['Содержимое папки будет считано из файлов заново.', 'Несохранённые правки сначала сохранятся.'],
+      okLabel: 'Перечитать'
+    });
+    if (!reloadOk) return;
     await saveDiskNow();
     if (Object.keys(dirty).length) {
       toast('Часть правок не сохранилась — обновление отменено', 'error');
@@ -602,7 +607,12 @@
       .filter(function (i) { return i && (i.type === 'note' || i.type === 'folder'); });
     var localNotes = items.filter(function (i) { return i.type === 'note'; });
     if (!localNotes.length) return;
-    if (!confirm('В локальном хранилище есть заметки (' + localNotes.length + ').\n\nПеренести их в подключённую папку? Существующие файлы не перезапишутся.')) return;
+    var migrateOk = await gdConfirm({
+      title: 'Перенести локальные заметки?',
+      lines: ['В локальном хранилище есть заметки: ' + localNotes.length + '.', 'Перенести их в подключённую папку? Существующие файлы не перезапишутся.'],
+      okLabel: 'Перенести'
+    });
+    if (!migrateOk) return;
 
     var byId = {};
     items.forEach(function (i) { byId[i.id] = i; });
@@ -1535,18 +1545,25 @@
     renderTagsPanel();
   }
 
-  function deleteItem(id) {
+  async function deleteItem(id) {
     var it = getItem(id);
     if (!it) return;
     var kids = descendantsOf(id);
-    var msg;
-    if (it.type === 'folder') {
-      msg = 'Удалить папку «' + it.name + '»' + (kids.length ? ' вместе с содержимым (' + kids.length + ')' : '') + '?';
-    } else {
-      msg = 'Удалить заметку «' + it.name + '»?';
-    }
-    msg += '\n\n' + (vaultMode === 'disk' ? 'Файлы будут удалены с диска.' : 'Объекты попадут в корзину — их можно будет восстановить.');
-    if (!confirm(msg)) return;
+    var dlgTitle = it.type === 'folder'
+      ? ('Удалить папку «' + it.name + '»' + (kids.length ? ' вместе с содержимым (' + kids.length + ')?' : '?'))
+      : ('Удалить заметку «' + it.name + '»?');
+    var okDel = await gdConfirm({
+      title: dlgTitle,
+      lines: [vaultMode === 'disk'
+        ? 'Файлы будут удалены с диска без возможности восстановления.'
+        : 'Объекты попадут в корзину — их можно будет восстановить.'],
+      okLabel: 'Удалить',
+      danger: true
+    });
+    if (!okDel) return;
+    it = getItem(id);
+    if (!it) return;
+    kids = descendantsOf(id);
 
     var items = [it].concat(kids);
     if (vaultMode === 'disk') {
@@ -1555,12 +1572,14 @@
         if (h && typeof h.remove === 'function') { h.remove().catch(function () {}); }
         if (disk.handles.delete) disk.handles.delete(x.id);
         delete vault.items[x.id];
+        delete dirty[x.id];
       });
       toast('Удалено с диска');
     } else {
       items.forEach(function (x) {
         vault.trash.push({ item: x, deletedAt: Date.now() });
         delete vault.items[x.id];
+        delete dirty[x.id];
       });
       toast('Перемещено в корзину');
     }
@@ -1938,7 +1957,17 @@
 
   function editorInput() {
     var note = currentId && getItem(currentId);
-    if (!note) return;
+    if (!note) {
+      // защита: если текущая запись потерялась (например, удалена), не теряем ввод
+      var text = $('#editor').value || '';
+      if (!text.trim()) return;
+      var t2 = $('#note-title') && $('#note-title').value ? $('#note-title').value.trim() : '';
+      note = createNote({ name: t2 || 'Восстановленная заметка', content: text, silent: true, open: false });
+      openNote(note.id);
+      note = getItem(currentId);
+      if (!note) return;
+      toast('Ввод сохранён в заметку «' + note.name + '»', 'error');
+    }
     note.content = $('#editor').value;
     note.updated = Date.now();
     markDirty(note.id);
@@ -2361,12 +2390,17 @@
     });
   }
 
-  function resetVault() {
+  async function resetVault() {
     var diskMode = vaultMode === 'disk';
-    var msg = diskMode
-      ? 'Отключить папку на диске и сбросить локальное хранилище?\n\nФайлы на диске не изменятся.'
-      : 'Сбросить хранилище?\n\nВсе заметки будут удалены, вернутся стартовые примеры. Сначала можно скачать резервную копию.';
-    if (!confirm(msg)) return;
+    var ok = await gdConfirm({
+      title: diskMode ? 'Отключить папку и сбросить хранилище?' : 'Сбросить хранилище?',
+      lines: diskMode
+        ? ['Локальное хранилище вернётся к стартовым примерам. Файлы на диске не изменятся.']
+        : ['Все заметки будут удалены, вернутся стартовые примеры.', 'Перед сбросом можно скачать резервную копию (меню хранилища → Экспорт).'],
+      okLabel: 'Сбросить',
+      danger: true
+    });
+    if (!ok) return;
     if (diskMode) detachDisk();
     try { localStorage.removeItem(LS_KEY); } catch (e) {}
     seedVault();
@@ -2400,6 +2434,88 @@
     pop.style.left = Math.round(r.right + 8) + 'px';
     pop.style.top = Math.round(Math.max(8, r.top - 6)) + 'px';
   }
+
+  /* ---------- фирменные диалоги (вместо системных окон) ---------- */
+
+  var GD_ICONS = {
+    ask: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1.5.9-1.5 1.8v.4"/><circle cx="11.6" cy="17" r="0.7" fill="currentColor"/></svg>',
+    warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20H2z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.4" r="0.7" fill="currentColor"/></svg>',
+    del: ICONS.trash
+  };
+  var gdLayers = [];
+
+  function gdDialog(opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      var layer = document.createElement('div');
+      layer.className = 'gd-layer';
+      var box = document.createElement('div');
+      box.className = 'gd-box' + (opts.danger ? ' danger' : '');
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-modal', 'true');
+      box.tabIndex = -1;
+
+      var head = document.createElement('div'); head.className = 'gd-head';
+      var ic = document.createElement('span'); ic.className = 'gd-ic';
+      ic.innerHTML = opts.danger ? GD_ICONS.del : GD_ICONS.ask;
+      var ttl = document.createElement('div'); ttl.className = 'gd-title';
+      ttl.textContent = opts.title || 'Графит';
+      var x = document.createElement('button');
+      x.className = 'gd-close'; x.type = 'button'; x.setAttribute('aria-label', 'Закрыть');
+      x.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+      head.appendChild(ic); head.appendChild(ttl); head.appendChild(x);
+
+      var body = document.createElement('div'); body.className = 'gd-body';
+      (opts.lines || []).forEach(function (s) {
+        var p = document.createElement('p'); p.textContent = s; body.appendChild(p);
+      });
+
+      var foot = document.createElement('div'); foot.className = 'gd-foot';
+      var cancelBtn = null;
+      if (!opts.alertOnly) {
+        cancelBtn = document.createElement('button');
+        cancelBtn.className = 'gd-btn'; cancelBtn.type = 'button';
+        cancelBtn.textContent = opts.cancelLabel || 'Отмена';
+        foot.appendChild(cancelBtn);
+      }
+      var okBtn = document.createElement('button');
+      okBtn.className = 'gd-btn ' + (opts.danger ? 'danger' : 'primary');
+      okBtn.type = 'button';
+      okBtn.textContent = opts.okLabel || (opts.alertOnly ? 'Понятно' : 'ОК');
+      foot.appendChild(okBtn);
+
+      box.appendChild(head); box.appendChild(body); box.appendChild(foot);
+      layer.appendChild(box);
+      document.body.appendChild(layer);
+      gdLayers.push(layer);
+
+      var done = false;
+      function close(val) {
+        if (done) return;
+        done = true;
+        document.removeEventListener('keydown', onKey, true);
+        var ix = gdLayers.indexOf(layer);
+        if (ix >= 0) gdLayers.splice(ix, 1);
+        if (layer.parentNode) layer.parentNode.removeChild(layer);
+        resolve(val);
+      }
+      function onKey(e) {
+        if (gdLayers[gdLayers.length - 1] !== layer) return;
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); }
+        else if (e.key === 'Enter' && document.activeElement !== cancelBtn) { e.preventDefault(); e.stopPropagation(); close(true); }
+        else if (e.ctrlKey || e.metaKey) { e.stopPropagation(); }
+      }
+      x.addEventListener('click', function () { close(false); });
+      okBtn.addEventListener('click', function () { close(true); });
+      if (cancelBtn) cancelBtn.addEventListener('click', function () { close(false); });
+      layer.addEventListener('mousedown', function (e) { if (e.target === layer) close(false); });
+      document.addEventListener('keydown', onKey, true);
+      setTimeout(function () { (opts.danger && cancelBtn ? cancelBtn : okBtn).focus(); }, 0);
+    });
+  }
+
+  function gdConfirm(opts) { return gdDialog(opts || {}); }
+  function gdAlert(opts) { var o = opts || {}; o.alertOnly = true; return gdDialog(o); }
 
   /* ---------- привязка событий ---------- */
 
@@ -2466,9 +2582,15 @@
       caret.textContent = hidden ? '▸' : '▾';
       this.setAttribute('aria-expanded', String(!hidden));
     });
-    $('#btn-trash-clear').addEventListener('click', function () {
+    $('#btn-trash-clear').addEventListener('click', async function () {
       if (!vault.trash.length) return;
-      if (!confirm('Очистить корзину без возможности восстановления?')) return;
+      var okClear = await gdConfirm({
+        title: 'Очистить корзину?',
+        lines: ['Удаление без возможности восстановления.'],
+        okLabel: 'Очистить',
+        danger: true
+      });
+      if (!okClear) return;
       vault.trash = [];
       persist();
       renderTrash();
@@ -2724,23 +2846,28 @@
       this.value = '';
     });
 
-    // глобальные клавиши
+    // глобальные клавиши — работают в русской и английской раскладке (e.code)
     document.addEventListener('keydown', function (e) {
+      if (document.querySelector('.gd-layer')) return; // открыт диалог — клавиши принадлежат ему
       var mod = e.ctrlKey || e.metaKey;
       var key = (e.key || '').toLowerCase();
-      if (mod && key === 's') {
+      var code = e.code || '';
+      function is(letter) {
+        return code === 'Key' + letter.toUpperCase() || key === letter;
+      }
+      if (mod && is('s')) {
         e.preventDefault();
         if (vaultMode === 'browser') saveLocal(); else saveDiskNow();
         return;
       }
-      if (mod && key === 'n' && !e.shiftKey) { e.preventDefault(); createNote({}); return; }
-      if (mod && (key === 'o' || key === 'p') && !e.shiftKey) { e.preventDefault(); openSwitcher(); return; }
-      if (mod && e.shiftKey && key === 'f') { e.preventDefault(); activateTab('search'); $('#search-input').focus(); return; }
-      if (mod && e.shiftKey && key === 'a') { e.preventDefault(); aiAnalyze(true); return; }
-      if (mod && key === 'e' && !e.shiftKey) { e.preventDefault(); cycleView(); return; }
-      if (mod && (key === '\\' || key === '|')) { e.preventDefault(); setRightPanel(!rightOpen); return; }
-      if (mod && !e.shiftKey && key === 'b' && document.activeElement === $('#editor')) { e.preventDefault(); applyCmd('bold'); return; }
-      if (mod && !e.shiftKey && key === 'i' && document.activeElement === $('#editor')) { e.preventDefault(); applyCmd('italic'); return; }
+      if (mod && is('n') && !e.shiftKey) { e.preventDefault(); createNote({}); return; }
+      if (mod && (is('o') || is('p')) && !e.shiftKey) { e.preventDefault(); openSwitcher(); return; }
+      if (mod && e.shiftKey && is('f')) { e.preventDefault(); activateTab('search'); $('#search-input').focus(); return; }
+      if (mod && e.shiftKey && is('a')) { e.preventDefault(); aiAnalyze(true); return; }
+      if (mod && is('e') && !e.shiftKey) { e.preventDefault(); cycleView(); return; }
+      if (mod && (key === '\\' || key === '|' || code === 'Backslash')) { e.preventDefault(); setRightPanel(!rightOpen); return; }
+      if (mod && !e.shiftKey && is('b') && document.activeElement === $('#editor')) { e.preventDefault(); applyCmd('bold'); return; }
+      if (mod && !e.shiftKey && is('i') && document.activeElement === $('#editor')) { e.preventDefault(); applyCmd('italic'); return; }
       if (e.key === 'Escape') {
         closeModal('#switcher-modal');
         closeModal('#graph-modal');
@@ -2753,7 +2880,9 @@
 
     // сохранение при закрытии
     window.addEventListener('beforeunload', function () {
-      if (vault && vaultMode === 'browser') saveLocal();
+      if (!vault) return;
+      if (vaultMode === 'browser') saveLocal();
+      else if (vaultMode === 'disk') { try { saveDiskNow(); } catch (e) { /* по возможности */ } }
     });
   }
 
@@ -2793,6 +2922,7 @@
 
     tryRestoreDisk();
     window.__appReady = true;
+    try { window.__grafitUi = { confirm: function (o) { return gdConfirm(o); }, alert: function (o) { return gdAlert(o); }, dialogOpen: function () { return !!document.querySelector('.gd-layer'); } }; } catch (e) {}
     window.__appInfo = function () {
       return {
         notes: noteItems().length,

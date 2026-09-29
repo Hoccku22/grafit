@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Графит — ближайший роадмап</title>
+<style>
+  :root{
+    --bg:#0e0e11; --panel:#161619; --panel2:#1b1b1f; --border:#2a2a31;
+    --text:#e9e9ee; --dim:#a8a8b2; --muted:#7b7b84;
+    --accent:#8b7bf7; --green:#53c98b; --amber:#e2b35c; --red:#e66a5c; --blue:#6ea8fe;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--text)}
+  body{font:16px/1.65 "Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding:56px 28px 72px}
+
+  .eyebrow{font:600 12px/1 "Segoe UI",sans-serif;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:10px}
+  .eyebrow svg{width:18px;height:18px}
+  h1{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:44px;line-height:1.15;margin:18px 0 10px;letter-spacing:-.01em}
+  .sub{color:var(--dim);font-size:15px}
+  .sub b{color:var(--text);font-weight:600}
+  .intro{margin-top:26px;color:var(--dim);max-width:70ch}
+  .intro b{color:var(--text)}
+
+  h2{font-family:Georgia,serif;font-size:24px;margin:0 0 6px}
+  .sec{margin-top:56px}
+  .sec-note{color:var(--muted);font-size:13.5px;margin-bottom:20px}
+
+  .done-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .done-card{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--green);border-radius:12px;padding:16px 16px 14px}
+  .done-card h3{font-size:15px;margin-bottom:6px}
+  .done-card p{color:var(--dim);font-size:13.5px;line-height:1.55}
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:999px;margin-bottom:10px}
+  .tag-done{background:rgba(83,201,139,.14);color:var(--green)}
+  .tag-next{background:rgba(139,123,247,.16);color:var(--accent)}
+  .tag-big{background:rgba(226,179,92,.14);color:var(--amber)}
+  .tag-later{background:rgba(123,123,132,.16);color:var(--muted)}
+
+  .tl{margin-top:18px;border-left:2px solid var(--border);padding-left:0;list-style:none}
+  .tl li{position:relative;padding:0 0 26px 26px}
+  .tl li::before{content:"";position:absolute;left:-7px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--panel2);border:2px solid var(--border)}
+  .tl li.now::before{border-color:var(--accent);background:var(--accent)}
+  .tl li.big::before{border-color:var(--amber)}
+  .tl li.later::before{border-color:var(--muted)}
+  .tl h3{font-size:16px;margin:0 0 4px}
+  .tl p{color:var(--dim);font-size:14px;max-width:74ch}
+  .tl p b{color:var(--text);font-weight:600}
+  .tl .why{color:var(--muted);font-size:12.5px;margin-top:4px}
+
+  .callout{margin-top:34px;background:linear-gradient(180deg,rgba(230,106,92,.07),rgba(230,106,92,.02));border:1px solid rgba(230,106,92,.35);border-radius:12px;padding:16px 18px}
+  .callout h3{font-size:15px;margin-bottom:6px;color:var(--red)}
+  .callout p{color:var(--dim);font-size:13.5px;max-width:78ch}
+  .callout p+p{margin-top:6px}
+
+  .principles{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}
+  .pr{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:13px 15px;font-size:13.5px;color:var(--dim)}
+  .pr b{display:block;color:var(--text);font-size:13.5px;margin-bottom:2px}
+
+  footer{margin-top:60px;border-top:1px solid var(--border);padding-top:20px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--border)}
+  footer a:hover{color:var(--text)}
+  code{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:1px 6px;font:12.5px/1.4 Consolas,monospace;color:var(--text)}
+
+  @media (max-width:760px){
+    h1{font-size:32px}
+    .done-grid{grid-template-columns:1fr}
+    .principles{grid-template-columns:1fr}
+  }
+  @media print{
+    body{background:#fff;color:#111}
+    .done-card,.pr{background:#fff;border-color:#ddd}
+    .sub,.intro,.tl p,.pr,.callout p{color:#333}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2.5 21.5 12 12 21.5 2.5 12z"/><path d="M12 2.5v19M2.5 12h19"/></svg>
+    Графит · план развития
+  </div>
+  <h1>Ближайший роадмап</h1>
+  <div class="sub">Версия <b>0.2.1</b> (сайт: <b>1.8</b>) · 29 сентября 2026 · заметки в стиле Obsidian, которые живут в ваших файлах</div>
+
+  <p class="intro">Это не обещание «когда-нибудь», а честный порядок работ: сначала то, что усиливает главное преимущество «Графита» — <b>скорость мысли и полный контроль над файлами</b>. Ниже: что уже выпущено сегодня и что делаем следующим.</p>
+
+  <section class="sec">
+    <h2>Выпущено в этой сборке</h2>
+    <div class="sec-note">Сегодняшний небольшой релиз — про нативность и надёжность.</div>
+    <div class="done-grid">
+      <div class="done-card">
+        <span class="tag tag-done">сделано</span>
+        <h3>Фирменные диалоги</h3>
+        <p>Все системные окна заменены диалогами в стиле «Графита»: удаление, очистка корзины, сброс, перечитывание папки. Тёмная и светлая тема, клавиши Enter и Escape, единый вид на сайте и в приложении.</p>
+      </div>
+      <div class="done-card">
+        <span class="tag tag-done">сделано</span>
+        <h3>Клавиши в любой раскладке</h3>
+        <p>Ctrl+N, Ctrl+O, Ctrl+B и остальные сочетания работают и на русской, и на английской раскладке — раньше на ЙЦУКЕН они не срабатывали.</p>
+      </div>
+      <div class="done-card">
+        <span class="tag tag-done">сделано</span>
+        <h3>Защита правок</h3>
+        <p>Приложение не открывает две копии окна на одно хранилище (второй запуск показывает уже открытое), потерянный редактор восстанавливает ввод в новую заметку, несохранённое записывается при закрытии.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>Шаги впереди</h2>
+    <div class="sec-note">Порядок соответствует пользе: сверху — то, что почувствуется сразу.</div>
+    <ul class="tl">
+      <li class="now">
+        <span class="tag tag-next">следующий шаг</span>
+        <h3>Мгновенный отклик папки (автоподхват изменений)</h3>
+        <p>Если файл изменился в облаке или в другой программе — «Графит» подхватит это <b>сразу</b>, не дожидаясь переключения окна. Сейчас папка проверяется при возврате к окну и по кнопке.</p>
+        <div class="why">Почему первым: это главный сценарий «телефон ↔ компьютер» через облако.</div>
+      </li>
+      <li class="now">
+        <span class="tag tag-next">следующий шаг</span>
+        <h3>Быстрая заметка из любого места Windows</h3>
+        <p>Значок в трее и глобальная горячая клавиша: нажали — всплыло маленькое окно, записали мысль, оно спряталось. Идеально, чтобы «поймать» идею, не разворачивая редактор.</p>
+        <div class="why">Почему вторым: заметки живут между делом, а не только когда открыт редактор.</div>
+      </li>
+      <li class="big">
+        <span class="tag tag-big">крупный шаг</span>
+        <h3>Новый движок редактора — подсказки ИИ прямо в строке</h3>
+        <p>Переведём редактор на CodeMirror и включим <b>настоящие подсказки по ходу письма</b>: серый «призрачный» текст, который принимается клавишей Tab, а не всплывающим списком. Плюс номера строк, сворачивание блоков и аккуратное выделение синтаксиса.</p>
+        <div class="why">Почему крупный: это заменит слой подсветки из версии 1.6 на полноценный редакторный опыт.</div>
+      </li>
+      <li class="later">
+        <span class="tag tag-later">дальше</span>
+        <h3>История версий заметки</h3>
+        <p>Не только корзина: посмотреть, что и когда менялось, и вернуть прежнюю версию одним нажатием.</p>
+      </li>
+      <li class="later">
+        <span class="tag tag-later">дальше</span>
+        <h3>Вложения</h3>
+        <p>Картинки и файлы прямо в заметках: вставка из буфера, перетаскивание, превью. Файлы кладутся рядом с заметками — всё так же остаётся вашим.</p>
+      </li>
+      <li class="later">
+        <span class="tag tag-later">дальше</span>
+        <h3>Поделиться заметкой</h3>
+        <p>Одна кнопка — и заметка превращается в аккуратную веб-страницу для отправки по ссылке.</p>
+      </li>
+      <li class="later">
+        <span class="tag tag-later">дальше</span>
+        <h3>Мобильный «Графит»</h3>
+        <p>Те же файлы через облачную папку — с телефона: читать, дописывать, искать. Мобильное веб-приложение (PWA), без отдельного аккаунта.</p>
+      </li>
+    </ul>
+  </section>
+
+  <div class="callout">
+    <h3>Отдельная тема: «после удаления не получается менять заметки»</h3>
+    <p>Автотесты прошли полный сценарий (правка → удаление → правка в обоих режимах, включая реальные клики и ввод) — ошибку не воспроизвели. Но добавили три защиты, которые закрывают самые вероятные причины: запрет двух окон на одно хранилище, самовосстановление ввода и запись при закрытии.</p>
+    <p>Если такое повторится на новой версии — просто напишите, что делали перед этим: шаги помогут найти причину окончательно.</p>
+  </div>
+
+  <section class="sec">
+    <h2>Принципы, которые не меняются</h2>
+    <div class="principles">
+      <div class="pr"><b>Файлы остаются вашими</b>Обычные .md — открываются в Obsidian, VS Code, блокноте. Никаких замков.</div>
+      <div class="pr"><b>Работает без интернета</b>Ядро — локальное. Сеть нужна только для облака и ИИ, и то по желанию.</div>
+      <div class="pr"><b>Бесплатно и без аккаунтов</b>Никаких подписок и регистраций: скачал и пользуешься.</div>
+      <div class="pr"><b>ИИ — по вашему выбору</b>Ключ или локальная модель. Текст никуда не уходит без вашей команды.</div>
+    </div>
+  </section>
+
+  <footer>
+    <span>«Графит» · заметки в стиле Obsidian</span>
+    <span><a href="https://hoccku22.github.io/grafit/">Веб-версия</a> · <a href="https://github.com/Hoccku22/grafit">Репозиторий</a></span>
+  </footer>
+
+</div>
+</body>
+</html>
