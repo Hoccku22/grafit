@@ -651,7 +651,7 @@
     openrouter: { base: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
     openai: { base: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
     groq: { base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
-    ollama: { base: 'http://localhost:11434/v1', model: 'llama3.1' },
+    ollama: { base: 'http://localhost:11434/v1', model: 'qwen2.5:1.5b' },
     custom: { base: '', model: '' }
   };
 
@@ -707,6 +707,8 @@
     $('#ai-key').value = aiCfg.key || '';
     setAiFormStatus('', '');
     $('#ai-modal').classList.add('open');
+    aiOllamaToggle();
+    if ($('#ai-provider').value === 'ollama') aiOllamaRefresh(true);
   }
 
   function readAiForm() {
@@ -718,6 +720,10 @@
       model: $('#ai-model').value.trim(),
       key: $('#ai-key').value.trim()
     };
+  }
+
+  function aiIsLocal() {
+    return !!(aiCfg && (aiCfg.provider === 'ollama' || /localhost|127\.0\.0\.1/i.test(aiCfg.base || '')));
   }
 
   function aiApplyPreset(id) {
@@ -827,7 +833,8 @@
   }
 
   function scheduleAiCheck() {
-    if (!aiCfg || !aiCfg.enabled || !aiCfg.auto || !aiCfg.key) return;
+    if (!aiCfg || !aiCfg.enabled || !aiCfg.auto) return;
+    if (!aiCfg.key && !aiIsLocal()) return;
     clearTimeout(aiTimer);
     aiTimer = setTimeout(function () { aiAnalyze(false); }, 3500);
   }
@@ -854,22 +861,26 @@
   async function aiCall(cfg, userText) {
     var base = String(cfg.base || '').replace(/\/+$/, '');
     if (!base) throw new Error('не указан адрес API');
-    if (!cfg.key) throw new Error('не указан ключ API');
     var url = base + '/chat/completions';
+    var model = cfg.model || 'gpt-4o-mini';
+    var userContent = userText;
+    if (/qwen3/i.test(model)) userContent += '\n/no_think';
     var payload = {
-      model: cfg.model || 'gpt-4o-mini',
+      model: model,
       messages: [
         { role: 'system', content: buildAiPrompt() },
-        { role: 'user', content: userText }
+        { role: 'user', content: userContent }
       ],
       temperature: 0.2,
       max_tokens: 1200
     };
+    var headers = { 'Content-Type': 'application/json' };
+    if (cfg.key) headers['Authorization'] = 'Bearer ' + cfg.key;
     var res = null;
     try {
       res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
+        headers: headers,
         body: JSON.stringify(payload)
       });
     } catch (e) {
@@ -918,7 +929,7 @@
   async function aiAnalyze(manual) {
     if (!aiCfg) loadAiCfg();
     if (!aiCfg.enabled) { if (manual) openAiSettings(); return; }
-    if (!aiCfg.key) { if (manual) openAiSettings(); return; }
+    if (!aiCfg.key && !aiIsLocal()) { if (manual) openAiSettings(); return; }
     var note = currentId && getItem(currentId);
     if (!note) { if (manual) toast('Сначала откройте заметку'); return; }
     var text = (note.content || '').trim();
@@ -982,13 +993,14 @@
   async function aiTestConnection() {
     var cfgForm = readAiForm();
     if (!cfgForm.base) { setAiFormStatus('error', 'Укажите адрес API'); return; }
-    if (!cfgForm.key) { setAiFormStatus('error', 'Укажите ключ API'); return; }
     setAiFormStatus('', 'Проверяю соединение…');
     try {
       var base = cfgForm.base.replace(/\/+$/, '');
+      var headers = { 'Content-Type': 'application/json' };
+      if (cfgForm.key) headers['Authorization'] = 'Bearer ' + cfgForm.key;
       var res = await fetch(base + '/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfgForm.key },
+        headers: headers,
         body: JSON.stringify({
           model: cfgForm.model || 'gpt-4o-mini',
           messages: [{ role: 'user', content: 'Ответь одним словом: ок' }],
@@ -1006,7 +1018,127 @@
       try { reply = data.choices[0].message.content || ''; } catch (e) {}
       setAiFormStatus('ok', 'Соединение работает ' + (reply ? '(' + reply.slice(0, 40) + ')' : ''));
     } catch (e) {
-      setAiFormStatus('error', 'Нет связи: возможен CORS или блокировка сети. Попробуйте OpenRouter, Ollama или версию на GitHub Pages.');
+      if (/localhost|127\.0\.0\.1/i.test(cfgForm.base)) {
+        setAiFormStatus('error', 'Нет связи с Ollama. Проверьте, что она запущена, и разрешите браузеру доступ: OLLAMA_ORIGINS=* (подсказка ниже), затем перезапустите Ollama.');
+      } else {
+        setAiFormStatus('error', 'Нет связи: возможен CORS или блокировка сети. Попробуйте OpenRouter, Ollama или версию на GitHub Pages.');
+      }
+    }
+  }
+
+  function aiOllamaRoot() {
+    var base = String((($('#ai-base') && $('#ai-base').value) || (aiCfg && aiCfg.base) || '')).replace(/\/+$/, '');
+    return base.replace(/\/v1$/i, '');
+  }
+
+  function aiOllamaToggle() {
+    var section = $('#ai-local-section');
+    if (!section) return;
+    var provider = ($('#ai-provider') && $('#ai-provider').value) || '';
+    var base = ($('#ai-base') && $('#ai-base').value) || '';
+    var show = provider === 'ollama' || /localhost|127\.0\.0\.1/i.test(base);
+    section.classList.toggle('hidden', !show);
+  }
+
+  function setAiOllamaStatus(kind, text) {
+    var el = $('#ai-ollama-progress');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'ai-status-line' + (kind ? ' ' + kind : '');
+  }
+
+  function aiOllamaSetProgress(pct, text) {
+    var bar = $('#ai-pull-bar');
+    if (bar) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    var wrap = $('#ai-pull-wrap');
+    if (wrap) wrap.classList.toggle('hidden', !(pct > 0 && pct < 100));
+    if (text) setAiOllamaStatus('', text);
+  }
+
+  async function aiOllamaRefresh(silent) {
+    var root = aiOllamaRoot();
+    var sel = $('#ai-ollama-models');
+    if (!sel || !root) return;
+    if (!silent) setAiOllamaStatus('', 'Смотрю список моделей…');
+    try {
+      var res = await fetch(root + '/api/tags');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var data = await res.json();
+      var models = (data.models || []).map(function (m) { return m.name; }).sort();
+      sel.innerHTML = '';
+      if (!models.length) {
+        var opt0 = document.createElement('option');
+        opt0.value = '';
+        opt0.textContent = '— пока ничего не скачано —';
+        sel.appendChild(opt0);
+      }
+      models.forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
+      });
+      var cur = $('#ai-model').value.trim();
+      if (cur && models.indexOf(cur) !== -1) sel.value = cur;
+      setAiOllamaStatus('ok', 'Моделей в Ollama: ' + models.length);
+    } catch (e) {
+      setAiOllamaStatus('error', 'Ollama недоступна — проверьте, что она запущена и задан OLLAMA_ORIGINS (см. подсказку ниже).');
+    }
+  }
+
+  async function aiOllamaPull() {
+    var root = aiOllamaRoot();
+    if (!root) { setAiOllamaStatus('error', 'Укажите адрес API: http://localhost:11434/v1'); return; }
+    var custom = (($('#ai-ollama-custom') && $('#ai-ollama-custom').value) || '').trim();
+    var tag = custom || (($('#ai-ollama-catalog') && $('#ai-ollama-catalog').value) || 'qwen2.5:1.5b');
+    setAiOllamaStatus('', 'Скачиваю ' + tag + '… это может занять несколько минут');
+    aiOllamaSetProgress(3, '');
+    try {
+      var res = await fetch(root + '/api/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: tag, stream: true })
+      });
+      if (!res.ok) {
+        var t = '';
+        try { t = (await res.text()).slice(0, 160); } catch (e2) {}
+        throw new Error('HTTP ' + res.status + (t ? ' ' + t : ''));
+      }
+      if (res.body && res.body.getReader) {
+        var reader = res.body.getReader();
+        var dec = new TextDecoder();
+        var buf = '';
+        while (true) {
+          var chunk = await reader.read();
+          if (chunk.done) break;
+          buf += dec.decode(chunk.value, { stream: true });
+          var lines = buf.split('\n');
+          buf = lines.pop();
+          for (var li = 0; li < lines.length; li++) {
+            var line = lines[li].trim();
+            if (!line) continue;
+            var obj = null;
+            try { obj = JSON.parse(line); } catch (e3) {}
+            if (!obj) continue;
+            if (obj.error) throw new Error(obj.error);
+            if (obj.total && obj.completed) {
+              var pct = Math.round((obj.completed / obj.total) * 100);
+              aiOllamaSetProgress(pct, 'Скачивание: ' + pct + '%');
+            } else if (obj.status) {
+              aiOllamaSetProgress(10, obj.status);
+            }
+          }
+        }
+      } else {
+        await res.json().catch(function () {});
+      }
+      aiOllamaSetProgress(0, '');
+      $('#ai-model').value = tag;
+      await aiOllamaRefresh(true);
+      setAiOllamaStatus('ok', 'Модель ' + tag + ' готова — не забудьте сохранить настройки');
+    } catch (e) {
+      aiOllamaSetProgress(0, '');
+      setAiOllamaStatus('error', 'Не удалось скачать: ' + (e && e.message ? e.message : e) + '. Проверьте, что Ollama запущена и задан OLLAMA_ORIGINS.');
     }
   }
 
@@ -2267,7 +2399,17 @@
       renderAiPanel();
       toast(aiCfg.auto ? 'Автопроверка включена' : 'Автопроверка выключена');
     });
-    $('#ai-provider').addEventListener('change', function () { aiApplyPreset(this.value); });
+    $('#ai-provider').addEventListener('change', function () {
+      aiApplyPreset(this.value);
+      aiOllamaToggle();
+      if (this.value === 'ollama') aiOllamaRefresh(true);
+    });
+    $('#ai-base').addEventListener('input', function () { aiOllamaToggle(); });
+    $('#ai-ollama-refresh').addEventListener('click', function () { aiOllamaRefresh(false); });
+    $('#ai-ollama-pull').addEventListener('click', aiOllamaPull);
+    $('#ai-ollama-models').addEventListener('change', function () {
+      if (this.value) $('#ai-model').value = this.value;
+    });
     $('#ai-save').addEventListener('click', function () {
       aiCfg = readAiForm();
       saveAiCfg();

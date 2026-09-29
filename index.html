@@ -270,8 +270,8 @@
       <h3>О разметке</h3>
       <p>Поддерживается Markdown, вики-ссылки <b>[[Название]]</b>, теги <b>#тег</b>, чек-листы, таблицы и блоки кода.</p>
       <h3>ИИ-помощник</h3>
-      <p>Необязательный помощник: подключите любой OpenAI-совместимый сервис (кнопка-искра в левой ленте) — он будет следить за текстом, подсказывать оформление и структуру, исправлять опечатки и предлагать определения. Работает на GitHub Pages и локально; на превью AutoClaw внешние запросы ограничены.</p>
-      <p class="about-version">Версия 1.3 · мини-Markdown собственной сборки · код открыт, лицензия MIT</p>
+      <p>Необязательный помощник: подключите любой OpenAI-совместимый сервис (кнопка-искра в левой ленте) — он будет следить за текстом, подсказывать оформление и структуру, исправлять опечатки и предлагать определения. Есть поддержка локальных моделей (Ollama) — их можно скачать прямо в настройках ИИ. Работает на GitHub Pages и локально; на превью AutoClaw внешние запросы ограничены.</p>
+      <p class="about-version">Версия 1.4 · мини-Markdown собственной сборки · код открыт, лицензия MIT</p>
     </div>
   </div>
 </div>
@@ -324,7 +324,28 @@
       </div>
       <div class="ai-row"><span class="ai-label">Адрес API</span><input id="ai-base" type="text" placeholder="https://openrouter.ai/api/v1" autocomplete="off" spellcheck="false"></div>
       <div class="ai-row"><span class="ai-label">Модель</span><input id="ai-model" type="text" placeholder="openai/gpt-4o-mini" autocomplete="off" spellcheck="false"></div>
-      <div class="ai-row"><span class="ai-label">Ключ API</span><input id="ai-key" type="password" placeholder="Вставьте ключ сервиса" autocomplete="off"></div>
+      <div class="ai-row"><span class="ai-label">Ключ API</span><input id="ai-key" type="password" placeholder="Для Ollama не нужен" autocomplete="off"></div>
+      <div class="ai-local hidden" id="ai-local-section">
+        <div class="ai-local-head">Локальная модель (Ollama)</div>
+        <div class="ai-row"><span class="ai-label">Модели</span>
+          <select id="ai-ollama-models"><option value="">— нажмите «Обновить список» —</option></select>
+        </div>
+        <div class="ai-actions"><button class="ai-btn" id="ai-ollama-refresh">Обновить список</button></div>
+        <div class="ai-row"><span class="ai-label">Скачать</span>
+          <select id="ai-ollama-catalog">
+            <option value="qwen2.5:1.5b">qwen2.5:1.5b — рекомендуемая, ≈1 ГБ</option>
+            <option value="qwen3:1.7b">qwen3:1.7b — поумнее, ≈1.4 ГБ</option>
+            <option value="gemma3:1b">gemma3:1b — самая лёгкая, ≈0.8 ГБ</option>
+            <option value="gemma2:2b">gemma2:2b — от Google, ≈1.6 ГБ</option>
+            <option value="llama3.2:3b">llama3.2:3b — от Meta, ≈2 ГБ</option>
+          </select>
+        </div>
+        <div class="ai-row"><span class="ai-label">Свой тег</span><input id="ai-ollama-custom" type="text" placeholder="например, mistral:7b" autocomplete="off" spellcheck="false"></div>
+        <div class="ai-actions"><button class="primary-btn" id="ai-ollama-pull">Скачать модель</button></div>
+        <div id="ai-pull-wrap" class="ai-progress hidden"><div id="ai-pull-bar" class="ai-progress-bar"></div></div>
+        <div id="ai-ollama-progress" class="ai-status-line"></div>
+        <div class="ai-note">Локальные модели работают без интернета и без ключей. Установите Ollama с сайта ollama.com и запустите её. Чтобы браузер мог к ней обращаться, разрешите запросы: выполните в PowerShell <code>[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS","*","User")</code> и перезапустите Ollama. Затем выберите модель и нажмите «Скачать» — всё загрузится прямо отсюда.</div>
+      </div>
       <div class="ai-actions">
         <button class="ai-btn" id="ai-test">Проверить соединение</button>
         <button class="primary-btn" id="ai-save">Сохранить</button>
@@ -333,6 +354,7 @@
       <div class="ai-note">
         Подойдёт любой сервис с OpenAI-совместимым API: OpenRouter (есть бесплатные модели), OpenAI, Groq, локальный Ollama и другие.
         Ключ хранится только в этом браузере. Текст заметок отправляется выбранному сервису при проверке.
+        Для локальной модели (Ollama) ключ не нужен — раздел появится при выборе сервиса «Ollama».
         На предпросмотре AutoClaw внешние запросы блокируются политикой хостинга — ИИ полностью работает в версии на GitHub Pages или локально.
       </div>
     </div>
