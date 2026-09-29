@@ -95,10 +95,21 @@ function makeDirHandle(p, name) {
   };
 }
 
-let APP_VERSION = '0.2.2';
+let APP_VERSION = '0.3.0';
 try {
   APP_VERSION = require(path.join(__dirname, 'package.json')).version || APP_VERSION;
 } catch (e) { /* ок */ }
+
+/* ---------- Быстрая заметка: мини-окно поверх всех окон ---------- */
+
+const QUICK_ARG = process.argv.find(function (a) { return a.indexOf('--grafit-quick=') === 0; });
+if (QUICK_ARG) {
+  window.__qn = {
+    save: function (text) { return ipcRenderer.invoke('qn:save', text); },
+    hide: function () { return ipcRenderer.invoke('qn:hide'); },
+    info: function () { return ipcRenderer.invoke('qn:info'); }
+  };
+}
 
 window.__grafitDesktop = {
   isDesktop: true,

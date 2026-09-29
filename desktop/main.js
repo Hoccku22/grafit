@@ -9,18 +9,21 @@
    - Упаковывается electron-builder-ом в портативный .exe и установщик (npm run dist). */
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, Tray, Menu, globalShortcut, screen, nativeImage, Notification } = require('electron');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const { spawn } = require('child_process');
 
 const SMOKE = process.argv.includes('--smoke');
+const QUICK_TEST = process.argv.includes('--quick-test');
+const QSHOT_ARG = process.argv.find(function (a) { return a.indexOf('--quick-shot=') === 0; });
+const QSHOT_PATH = QSHOT_ARG ? QSHOT_ARG.slice(QSHOT_ARG.indexOf('=') + 1) : null;
 const SHOT_ARG = process.argv.find(function (a) { return a.indexOf('--shot=') === 0; });
 const SHOT_PATH = SHOT_ARG ? SHOT_ARG.slice(SHOT_ARG.indexOf('=') + 1) : (SMOKE ? path.join(appRootSafe(), 'shot.png') : null);
 const OUT_ARG = process.argv.find(function (a) { return a.indexOf('--smoke-out=') === 0; });
 const OUT_PATH = OUT_ARG ? OUT_ARG.slice(OUT_ARG.indexOf('=') + 1) : null;
-if (SMOKE) app.disableHardwareAcceleration();
+if (SMOKE || QUICK_TEST) app.disableHardwareAcceleration();
 
 function appRootSafe() { try { return __dirname; } catch (e) { return '.'; } }
 
@@ -31,6 +34,10 @@ let CONFIG_DIR = appRoot;
 let engineProc = null;
 let engineStartedByUs = false;
 let mainWin = null;
+let tray = null;
+let quickWin = null;
+let isQuitting = false;
+let hotkeyDisplay = '';
 
 const CONFIG_NAME = 'grafit.config.json';
 const BAR_H = 34;
@@ -113,7 +120,7 @@ async function isOllamaUp() {
 }
 
 async function startEngine() {
-  if (SMOKE) return;
+  if (SMOKE || QUICK_TEST) return;
   if (await isOllamaUp()) {
     console.log('[engine] Ollama уже запущена — используем её');
     return;
@@ -149,7 +156,7 @@ function createWindow() {
     height: 840,
     minWidth: 880,
     minHeight: 620,
-    show: !SMOKE,
+    show: !SMOKE && !QUICK_TEST,
     backgroundColor: '#1e1e21',
     title: 'Графит',
     autoHideMenuBar: true,
@@ -170,6 +177,15 @@ function createWindow() {
   }
   const win = new BrowserWindow(opts);
   mainWin = win;
+
+  // Закрытие окна прячет программу в трей (чтобы работали быстрая заметка и глобальная клавиша)
+  win.on('close', function (e) {
+    if (!isQuitting && !SMOKE && !QUICK_TEST) {
+      e.preventDefault();
+      win.hide();
+      maybeTrayHint();
+    }
+  });
 
   win.loadFile(path.join(appRoot, 'app', 'index.html'));
 
@@ -204,7 +220,160 @@ function createWindow() {
       }, 2200);
     });
   }
+  if (QUICK_TEST) {
+    win.webContents.once('did-finish-load', function () {
+      setTimeout(async function () {
+        const res = { steps: {} };
+        try {
+          res.steps.userData = app.getPath('userData');
+          res.steps.tray = !!tray;
+          res.steps.hotkey = hotkeyDisplay || null;
+          toggleQuickNote();
+          await new Promise(function (r) { setTimeout(r, 800); });
+          res.steps.quickVisible = !!(quickWin && quickWin.isVisible());
+          res.steps.notesBefore = await win.webContents.executeJavaScript('window.__appInfo().notes');
+          await quickWin.webContents.executeJavaScript('window.__qnSet && window.__qnSet("Тест быстрой заметки\\nвторая строка мысли"); true');
+          await new Promise(function (r) { setTimeout(r, 300); });
+          if (QSHOT_PATH) {
+            try {
+              const img = await quickWin.webContents.capturePage();
+              fs.writeFileSync(QSHOT_PATH, img.toPNG());
+              console.log('QUICK_SHOT ' + QSHOT_PATH);
+            } catch (e2) { console.log('QUICK_SHOT_ERR ' + (e2 && e2.message)); }
+          }
+          await quickWin.webContents.executeJavaScript('(function(){ var e = new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true, cancelable: true }); (document.getElementById("qn-text") || document).dispatchEvent(e); return true; })()');
+          await new Promise(function (r) { setTimeout(r, 1100); });
+          res.steps.notesAfter = await win.webContents.executeJavaScript('window.__appInfo().notes');
+          res.steps.saved = res.steps.notesAfter === res.steps.notesBefore + 1;
+          res.steps.quickHiddenAfterSave = !!(quickWin && !quickWin.isVisible());
+          res.steps.treeHasNote = await win.webContents.executeJavaScript('(function(){ return [].some.call(document.querySelectorAll("#file-tree .item-label"), function(e){ return e.textContent.indexOf("Тест быстрой заметки") !== -1; }); })()');
+        } catch (e) { res.err = String(e && e.message); }
+        console.log('QUICK_TEST_RESULT ' + JSON.stringify(res, null, 2));
+        app.exit(res.steps && res.steps.saved ? 0 : 1);
+      }, 2400);
+    });
+  }
   return win;
+}
+
+/* ---------- Трей, глобальная клавиша и быстрая заметка ---------- */
+
+function showMain() {
+  if (!mainWin || mainWin.isDestroyed()) return;
+  try {
+    if (mainWin.isMinimized()) mainWin.restore();
+    mainWin.show();
+    mainWin.focus();
+  } catch (e) { /* ок */ }
+}
+
+function maybeTrayHint() {
+  try {
+    const flag = path.join(app.getPath('userData'), 'tray-hint.flag');
+    if (fs.existsSync(flag)) return;
+    fs.writeFileSync(flag, '1');
+    if (Notification.isSupported && Notification.isSupported()) {
+      new Notification({
+        title: '«Графит» свёрнут в трей',
+        body: 'Программа осталась работать. ' + (hotkeyDisplay || 'Ctrl+Alt+N') + ' — быстрая заметка из любой программы.'
+      }).show();
+    }
+  } catch (e) { /* ок */ }
+}
+
+function createTray() {
+  try {
+    let img = nativeImage.createFromPath(path.join(appRoot, 'build', 'tray.png'));
+    if (img.isEmpty()) img = nativeImage.createFromPath(path.join(appRoot, 'build', 'icon.png')).resize({ width: 16, height: 16 });
+    if (img.isEmpty()) { console.log('[tray] нет значка — трей пропущен'); return; }
+    tray = new Tray(img);
+    tray.setToolTip('Графит · быстрая заметка: ' + (hotkeyDisplay || 'Ctrl+Alt+N'));
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Быстрая заметка', click: function () { toggleQuickNote(); } },
+      { label: 'Открыть «Графит»', click: function () { showMain(); } },
+      { type: 'separator' },
+      { label: 'Выход', click: function () { isQuitting = true; app.quit(); } }
+    ]));
+    tray.on('click', function () { showMain(); });
+    console.log('[tray] создан');
+  } catch (e) { console.log('[tray] ошибка: ' + (e && e.message)); }
+}
+
+function registerHotkey() {
+  const wanted = String(CONFIG.hotkey || 'Control+Alt+N');
+  const candidates = [wanted, 'Control+Alt+N', 'Control+Alt+Space'];
+  for (const c of candidates) {
+    try {
+      if (globalShortcut.register(c, function () { toggleQuickNote(); })) {
+        hotkeyDisplay = c.replace('Control', 'Ctrl').replace('CommandOrControl', 'Ctrl');
+        console.log('[hotkey] зарегистрирован: ' + hotkeyDisplay);
+        return true;
+      }
+    } catch (e) { /* пробуем следующий */ }
+  }
+  console.log('[hotkey] не удалось зарегистрировать');
+  return false;
+}
+
+function createQuickWindow() {
+  const opts = {
+    width: 470,
+    height: 244,
+    show: false,
+    frame: false,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: '#161619',
+    title: 'Быстрая заметка',
+    webPreferences: {
+      preload: path.join(appRoot, 'preload.js'),
+      contextIsolation: false,
+      sandbox: false,
+      nodeIntegration: false,
+      spellcheck: false,
+      additionalArguments: ['--grafit-quick=1']
+    }
+  };
+  quickWin = new BrowserWindow(opts);
+  try { quickWin.setAlwaysOnTop(true, 'screen-saver'); } catch (e) { /* ок */ }
+  quickWin.loadFile(path.join(appRoot, 'app', 'quick.html'));
+  quickWin.on('close', function (e) {
+    if (!isQuitting) { e.preventDefault(); quickWin.hide(); }
+  });
+  console.log('[quick] окно создано');
+}
+
+function toggleQuickNote() {
+  if (!quickWin || quickWin.isDestroyed()) createQuickWindow();
+  if (quickWin.isVisible()) { quickWin.hide(); return; }
+  try {
+    const pt = screen.getCursorScreenPoint();
+    const wa = screen.getDisplayNearestPoint(pt).workArea;
+    const b = quickWin.getBounds();
+    quickWin.setPosition(
+      Math.round(wa.x + (wa.width - b.width) / 2),
+      Math.round(wa.y + (wa.height - b.height) / 2 - wa.height * 0.10)
+    );
+  } catch (e) { try { quickWin.center(); } catch (e2) { /* ок */ } }
+  quickWin.show();
+  quickWin.focus();
+  quickWin.webContents.executeJavaScript('window.__qnFocus && window.__qnFocus(); true').catch(function () { /* ок */ });
+}
+
+async function quickSave(text) {
+  text = String(text || '');
+  if (!text.trim()) return { ok: false, err: 'пустая заметка' };
+  if (!mainWin || mainWin.isDestroyed()) return { ok: false, err: 'нет главного окна' };
+  try {
+    const res = await mainWin.webContents.executeJavaScript(
+      '(window.__grafitQuickNote ? window.__grafitQuickNote(' + JSON.stringify(text) + ') : { ok: false, err: "Графит ещё загружается" })'
+    );
+    return (res && typeof res === 'object') ? res : { ok: false, err: 'bad-result' };
+  } catch (e) { return { ok: false, err: String(e && e.message) }; }
 }
 
 /* Цвет системных кнопок окна следует за темой приложения */
@@ -219,18 +388,12 @@ ipcMain.on('shell:theme', function (ev, theme) {
 
 /* Защита от двух окон: второй запуск показывает уже открытое окно.
    (Две копии, работающие с одним хранилищем, могли бы затирать правки друг друга.) */
-const gotSingleLock = SMOKE ? true : app.requestSingleInstanceLock();
+const gotSingleLock = (SMOKE || QUICK_TEST) ? true : app.requestSingleInstanceLock();
 if (!gotSingleLock) {
   app.quit();
-} else if (!SMOKE) {
+} else if (!SMOKE && !QUICK_TEST) {
   app.on('second-instance', function () {
-    if (mainWin) {
-      try {
-        if (mainWin.isMinimized()) mainWin.restore();
-        mainWin.show();
-        mainWin.focus();
-      } catch (e) { /* ок */ }
-    }
+    showMain();
   });
 }
 
@@ -296,18 +459,34 @@ app.whenReady().then(async function () {
     return { up: await isOllamaUp() };
   });
 
+  // Быстрая заметка: мостики мини-окна
+  ipcMain.handle('qn:save', async function (ev, text) { return await quickSave(text); });
+  ipcMain.handle('qn:hide', function () { if (quickWin && !quickWin.isDestroyed()) quickWin.hide(); });
+  ipcMain.handle('qn:info', function () { return { hotkey: hotkeyDisplay, packaged: app.isPackaged }; });
+
   await startEngine();
   createWindow();
+  if (!SMOKE) {
+    createTray();
+    registerHotkey();
+  }
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
-app.on('window-all-closed', function () {
-  stopEngine();
-  app.quit();
+app.on('will-quit', function () {
+  try { globalShortcut.unregisterAll(); } catch (e) { /* ок */ }
 });
 app.on('before-quit', function () {
+  isQuitting = true;
   stopEngine();
+});
+app.on('window-all-closed', function () {
+  // Обычное закрытие окна прячет его в трей; полный выход — через трей или завершение системы.
+  if (isQuitting || SMOKE || QUICK_TEST) {
+    stopEngine();
+    app.quit();
+  }
 });

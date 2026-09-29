@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Быстрая заметка</title>
+<style>
+  :root{ --bg:#161619; --panel:#1c1c20; --border:#2a2a31; --text:#e9e9ee; --dim:#a8a8b2; --muted:#7b7b84; --accent:#8b7bf7; --green:#53c98b; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{background:var(--bg);color:var(--text);font:14px/1.55 "Segoe UI",system-ui,sans-serif;border:1px solid var(--border);display:flex;flex-direction:column}
+  .qn-head{display:flex;align-items:center;gap:9px;padding:11px 14px 5px;-webkit-app-region:drag;user-select:none}
+  .qn-logo{display:flex;color:var(--accent)}
+  .qn-logo svg{width:15px;height:15px}
+  .qn-title{font-size:12.5px;font-weight:600;color:var(--dim);letter-spacing:.02em}
+  .qn-hot{margin-left:auto;font-size:11px;color:var(--muted);-webkit-app-region:no-drag}
+  textarea{flex:1 1 auto;background:transparent;border:0;outline:none;resize:none;color:var(--text);font:14px/1.6 "Segoe UI",system-ui,sans-serif;padding:7px 16px 2px;overflow-y:auto}
+  textarea::placeholder{color:var(--muted)}
+  .qn-foot{display:flex;align-items:center;gap:14px;padding:9px 14px 12px;color:var(--muted);font-size:11.5px;border-top:1px solid #232329}
+  .qn-foot kbd{background:#232329;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font:11px/1.4 Consolas,monospace;color:var(--dim)}
+  .qn-status{margin-left:auto;font-weight:600;opacity:0;transition:opacity .18s}
+  .qn-status.show{opacity:1}
+  .qn-status.ok{color:var(--green)}
+  .qn-status.err{color:#e66a5c}
+</style>
+</head>
+<body>
+  <div class="qn-head">
+    <span class="qn-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 21.5 12 12 21.5 2.5 12z"/><path d="M12 2.5v19M2.5 12h19"/></svg></span>
+    <span class="qn-title">Быстрая заметка</span>
+    <span class="qn-hot" id="qn-hot">Ctrl+Alt+N — из любой программы</span>
+  </div>
+  <textarea id="qn-text" placeholder="Мысль, задача, идея…" spellcheck="false"></textarea>
+  <div class="qn-foot">
+    <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> — сохранить</span>
+    <span><kbd>Esc</kbd> — спрятать</span>
+    <span class="qn-status" id="qn-status"></span>
+  </div>
+<script>
+(function () {
+  'use strict';
+  var ta = document.getElementById('qn-text');
+  var st = document.getElementById('qn-status');
+  var hot = document.getElementById('qn-hot');
+  var hub = window.__qn || null;
+
+  function setStatus(text, cls) {
+    st.textContent = text || '';
+    st.className = 'qn-status' + (text ? ' show' : '') + (cls ? ' ' + cls : '');
+  }
+  function hide() {
+    try { if (hub) hub.hide(); } catch (e) { /* ок */ }
+  }
+  function save() {
+    var text = ta.value;
+    if (!text.trim()) { hide(); return; }
+    if (!hub) { setStatus('Не удалось: нет связи с приложением', 'err'); return; }
+    setStatus('Сохраняю…', '');
+    hub.save(text).then(function (res) {
+      if (res && res.ok) {
+        setStatus('Сохранено ✓', 'ok');
+        ta.value = '';
+        setTimeout(hide, 700);
+      } else {
+        setStatus('Не получилось: ' + ((res && res.err) || 'ошибка'), 'err');
+      }
+    }).catch(function (e) { setStatus('Не получилось: ' + (e && e.message), 'err'); });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { hide(); }
+    else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
+  });
+  window.addEventListener('blur', function () { if (!ta.value.trim()) hide(); });
+  window.__qnSet = function (t) { ta.value = String(t || ''); ta.focus(); };
+  window.__qnFocus = function () { try { ta.focus(); } catch (e) { /* ок */ } };
+  window.__qnSave = save;
+  if (hub && hub.info) {
+    hub.info().then(function (info) {
+      if (info && info.hotkey) hot.textContent = info.hotkey + ' — из любой программы';
+    }).catch(function () { /* ок */ });
+  }
+  ta.focus();
+})();
+</script>
+</body>
+</html>

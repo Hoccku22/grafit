@@ -2929,6 +2929,19 @@
     tryRestoreDisk();
     window.__appReady = true;
     try { window.__grafitUi = { confirm: function (o) { return gdConfirm(o); }, alert: function (o) { return gdAlert(o); }, dialogOpen: function () { return !!document.querySelector('.gd-layer'); } }; } catch (e) {}
+    try {
+      // Быстрая заметка из мини-окна (десктоп): создаёт заметку в текущем хранилище
+      window.__grafitQuickNote = function (text) {
+        try {
+          text = String(text || '').replace(/\r\n/g, '\n').trim();
+          if (!text) return { ok: false, err: 'пустая заметка' };
+          var firstLine = (text.split('\n')[0] || '').trim().slice(0, 48) || 'Быстрая заметка';
+          var it = createNote({ name: firstLine, content: text + '\n', silent: true, open: false });
+          toast('Быстрая заметка: «' + it.name + '»', 'ok');
+          return { ok: true, name: it.name };
+        } catch (e2) { return { ok: false, err: String(e2 && e2.message) }; }
+      };
+    } catch (e) {}
     window.__appInfo = function () {
       return {
         notes: noteItems().length,

@@ -59,6 +59,15 @@ app.whenReady().then(async function () {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, masked.toPNG());
     console.log('ICON_OK ' + out + ' (' + W + 'x' + H + ')');
+
+    // Значок для трея (32×32): уменьшенная версия основного значка
+    try {
+      const trayImg = nativeImage.createFromPath(out).resize({ width: 32, height: 32 });
+      const tout = path.join(__dirname, '..', 'build', 'tray.png');
+      fs.writeFileSync(tout, trayImg.toPNG());
+      console.log('TRAY_OK ' + tout + ' (32x32)');
+    } catch (e2) { console.log('TRAY_ERR ' + (e2 && e2.message)); }
+
     app.exit(0);
   } catch (e) {
     console.log('ICON_ERR ' + (e && e.message));

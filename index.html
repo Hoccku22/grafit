@@ -83,6 +83,7 @@
   .plans ul{list-style:none;margin:12px 0 16px;display:grid;gap:8px}
   .plans li{color:var(--dim);font-size:14px;padding-left:22px;position:relative}
   .plans li::before{content:"";position:absolute;left:4px;top:9px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .plans li.done::before{background:var(--green)}
   .plans li b{color:var(--text);font-weight:600}
 
   .downs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
@@ -215,10 +216,10 @@
 
   <section>
     <h2>Что дальше</h2>
-    <div class="sec-sub">Ближайшие шаги развития — подробнее в роадмапе с оценками важности и сложности.</div>
+    <div class="sec-sub">Первый шаг уже готов — подробнее в роадмапе с оценками важности и сложности.</div>
     <div class="plans">
       <ul>
-        <li><b>Быстрая заметка из любой программы</b> — значок в трее и глобальная горячая клавиша.</li>
+        <li class="done"><b>Быстрая заметка из любой программы</b> — сделано в 0.3.0: значок в трее и клавиша Ctrl+Alt+N.</li>
         <li><b>Мгновенный подхват изменений папки</b> — заметки обновляются сразу, как только изменился файл в облаке.</li>
         <li><b>Подсказки ИИ прямо в строке</b> — серый «призрачный» текст, который принимается клавишей Tab.</li>
       </ul>

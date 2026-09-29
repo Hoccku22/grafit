@@ -1,7 +1,7 @@
 {
   "name": "grafit-desktop",
   "productName": "Графит",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Графит — десктопный редактор заметок в стиле Obsidian",
   "author": "Hoccku22",
   "main": "main.js",
@@ -10,6 +10,7 @@
     "start": "electron .",
     "smoke": "electron . --smoke",
     "shot": "electron . --smoke --shot=shot.png",
+    "quick": "electron . --quick-test",
     "icon": "electron tools/gen-icon.js",
     "dist": "electron-builder --win",
     "dist:portable": "electron-builder --win portable"
@@ -30,6 +31,7 @@
       "preload.js",
       "app/**/*",
       "build/icon.png",
+      "build/tray.png",
       "!tools/**",
       "!dist/**",
       "!shot.png",

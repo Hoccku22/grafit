@@ -29,7 +29,7 @@
   .sec{margin-top:54px}
   .sec-note{color:var(--muted);font-size:13.5px;margin-bottom:20px}
 
-  .done-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .done-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
   .done-card{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--green);border-radius:12px;padding:16px 16px 14px}
   .done-card h3{font-size:15px;margin-bottom:6px}
   .done-card p{color:var(--dim);font-size:13.5px;line-height:1.55}
@@ -66,6 +66,9 @@
   .tbl td:first-child{color:var(--muted);font-weight:700;width:28px}
   .tbl td b{color:var(--text);font-weight:600}
   .pill{display:inline-block;font-size:11px;font-weight:700;padding:2.5px 9px;border-radius:999px;white-space:nowrap}
+  .p-done{background:rgba(83,201,139,.14);color:var(--green)}
+  .dot.done .dd{border-color:var(--green)}
+  .progress{margin-top:14px}
   .p-high{background:rgba(139,123,247,.16);color:#b3a7ff}
   .p-mid{background:rgba(226,179,92,.15);color:var(--amber)}
   .p-low{background:rgba(110,168,254,.14);color:var(--blue)}
@@ -100,13 +103,14 @@
     Графит · план развития
   </div>
   <h1>Роадмап с оценками</h1>
-  <div class="sub">Версия <b>0.2.2</b> (сайт: <b>1.10</b>) · 29 сентября 2026 · <b>важность</b> отвечает на вопрос «насколько это нужно», <b>сложность</b> — «сколько работы»</div>
+  <div class="sub">Версия <b>0.3.0</b> (сайт: <b>1.11</b>) · 29 сентября 2026 · <b>важность</b> отвечает на вопрос «насколько это нужно», <b>сложность</b> — «сколько работы»</div>
+  <div class="progress"><span class="pill p-done">выполнено 1 из 7</span></div>
 
   <p class="intro">Порядок работ строится по простому правилу: сначала <b>важное и недорогое</b>, потом важное и крупное, затем всё остальное. Ниже — карта приоритетов, оценки по каждому пункту и рекомендуемая последовательность.</p>
 
   <section class="sec">
-    <h2>Выпущено в 0.2.x</h2>
-    <div class="sec-note">Последние три сборки программы — про надёжность и аккуратность.</div>
+    <h2>Выпущено</h2>
+    <div class="sec-note">Последние сборки программы — надёжность, аккуратность и скорость мысли.</div>
     <div class="done-grid">
       <div class="done-card">
         <span class="tag tag-done">сделано</span>
@@ -123,6 +127,11 @@
         <h3>Защита правок</h3>
         <p>Одно окно на хранилище, восстановление ввода, запись при закрытии — правки больше не теряются.</p>
       </div>
+      <div class="done-card">
+        <span class="tag tag-done">сделано · 0.3.0</span>
+        <h3>Быстрая заметка</h3>
+        <p>Ctrl+Alt+N из любой программы: мини-окно поверх всех окон, Ctrl+Enter — сохранить, Esc — спрятать. Значок в трее, закрытие — в трей.</p>
+      </div>
     </div>
   </section>
 
@@ -137,7 +146,7 @@
         <div class="qcell tr">крупные шаги</div>
         <div class="qcell bl">небольшие улучшения</div>
         <div class="qcell br">позже</div>
-        <span class="dot imp-high" style="left:21%;top:24%"><span class="dd">1</span><span class="lbl">Быстрая заметка</span></span>
+        <span class="dot imp-high done" style="left:21%;top:24%"><span class="dd">1</span><span class="lbl">Быстрая заметка · готово</span></span>
         <span class="dot imp-high" style="left:58%;top:30%"><span class="dd">2</span><span class="lbl">Отклик папки</span></span>
         <span class="dot imp-high" style="left:82%;top:16%"><span class="dd">3</span><span class="lbl">Подсказки в строке</span></span>
         <span class="dot imp-mid" style="left:24%;top:62%"><span class="dd">4</span><span class="lbl">Поделиться ссылкой</span></span>
@@ -160,8 +169,8 @@
       <tr><th>#</th><th>Обновление</th><th>Что даёт</th><th>Важность</th><th>Сложность</th></tr>
       <tr>
         <td>1</td>
-        <td><b>Быстрая заметка из любого места</b></td>
-        <td>Значок в трее и глобальная горячая клавиша: нажал в любой программе — всплыло мини-окно, записал мысль, спрятал. Самый частый сценарий «поймать идею».</td>
+        <td><b>Быстрая заметка из любого места</b> <span class="pill p-done">сделано в 0.3.0</span></td>
+        <td>Значок в трее и глобальная клавиша Ctrl+Alt+N: нажал в любой программе — всплыло мини-окно, записал мысль, спрятал. Выпущено 29.09.2026.</td>
         <td><span class="pill p-high">высокая</span></td>
         <td><span class="pill s-low">низкая</span></td>
       </tr>
@@ -209,7 +218,7 @@
       </tr>
     </table>
     <div class="order-note">
-      <b>Рекомендуемый порядок:</b> сначала пункты 1–2 (быстрые победы, ощущаются сразу), затем 3 (крупный шаг, ради которого всё затевалось), после — 4–7 по мере интереса. Оценки можно пересматривать: роадмап живой.
+      <b>Рекомендуемый порядок:</b> пункт 1 уже готов — в версии 0.3.0. Следом — пункты 2 (ощущается сразу) и 3 (крупный шаг), затем 4–7 по мере интереса. Оценки можно пересматривать: роадмап живой.
     </div>
   </section>
 
