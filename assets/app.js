@@ -107,6 +107,11 @@
   var aiLastHash = {};
   var aiSuggestions = {};
   var aiLastRun = 0;
+  var aiLastRaw = {};
+  var aiHadError = {};
+  var aiDecoRanges = [];
+  var aiPopupIdx = null;
+  var aiLastRawContent = '';
 
   /* ---------- IndexedDB (для хранения дескриптора папки) ---------- */
 
@@ -655,7 +660,7 @@
     custom: { base: '', model: '' }
   };
 
-  var AI_TYPE_LABELS = { typo: 'Орфография', format: 'Форматирование', structure: 'Структура', definition: 'Определение', tip: 'Совет' };
+  var AI_TYPE_LABELS = { typo: 'Орфография', format: 'Форматирование', structure: 'Структура', definition: 'Определение', style: 'Формулировка', tip: 'Совет' };
 
   function defaultAiCfg() {
     return { enabled: false, auto: true, provider: 'openrouter', base: AI_PRESETS.openrouter.base, model: AI_PRESETS.openrouter.model, key: '' };
@@ -769,7 +774,22 @@
       return;
     }
     if (!items.length) {
-      list.innerHTML = '<div class="empty">Пока всё чисто. Пишите — подсказки появятся сами.</div>';
+      var rawText = note ? aiLastRaw[note.id] : '';
+      if (note && aiHadError[note.id] && rawText) {
+        var det = document.createElement('div');
+        var dlink = document.createElement('button');
+        dlink.className = 'link-btn';
+        dlink.textContent = 'Показать ответ модели';
+        var dpre = document.createElement('pre');
+        dpre.className = 'ai-raw hidden';
+        dpre.textContent = truncate(rawText, 1500);
+        dlink.addEventListener('click', function () { dpre.classList.toggle('hidden'); });
+        det.appendChild(dlink);
+        det.appendChild(dpre);
+        list.appendChild(det);
+      } else {
+        list.innerHTML = '<div class="empty">Пока всё чисто. Пишите — подсказки появятся сами.</div>';
+      }
       return;
     }
 
@@ -844,8 +864,9 @@
       'Ты — аккуратный ассистент-редактор заметок в приложении «Графит» (Markdown, русский язык).',
       'Проанализируй текст ниже и предложи точечные улучшения.',
       '',
-      'Отвечай СТРОГО одним JSON-объектом, без пояснений и без markdown-обёрток:',
-      '{"suggestions":[{"type":"typo|format|structure|definition|tip","title":"короткий заголовок","explanation":"1 предложение — зачем","find":"точный фрагмент исходного текста","replace":"чем заменить"}]}',
+      'Отвечай только валидным JSON: первый символ { , последний } . Без пояснений и без markdown-обёрток:',
+      '{"suggestions":[{"type":"typo|format|structure|definition|style|tip","title":"короткий заголовок","explanation":"1 предложение — зачем","find":"точный фрагмент исходного текста","replace":"чем заменить"}]}',
+      'Пример: {"suggestions":[{"type":"typo","title":"Дефис вместо тире","explanation":"В определении ставится длинное тире","find":"Определение - совокупность","replace":"Определение — совокупность"},{"type":"definition","title":"Дополнить определение","explanation":"Можно дать точную формулировку","find":"Определение —","replace":"Определение — совокупность взаимосвязанных элементов"}]}',
       '',
       'Правила:',
       '- find — ТОЧНАЯ короткая подстрока исходного текста (скопируй как есть); replace — готовая замена.',
@@ -854,17 +875,19 @@
       '- structure — структура: добавить заголовок, разбить текст, превратить перечисление в список — конкретной правкой.',
       '- definition — если видишь незаконченное определение («Слово — », «Слово:» или «Слово —» в конце строки), предложи короткое точное определение: find — этот фрагмент, replace — «Слово — определение».',
       '- tip — совет без правки (find и replace — пустые строки).',
-      '- Максимум 6 предложений, самое важное — первым. Не переписывай весь текст и не меняй смысл. Если всё хорошо — {"suggestions":[]}.'
+      '- style — неудачная формулировка: предложи более гладкий вариант той же мысли (find — фраза, replace — переформулировка).',
+      '- Максимум 4 предложения, самое важное — первым. Не переписывай весь текст и не меняй смысл. explanation — не длиннее 15 слов. Если всё хорошо — {"suggestions":[]}.'
     ].join('\n');
   }
 
-  async function aiCall(cfg, userText) {
+  async function aiCall(cfg, userText, strict) {
     var base = String(cfg.base || '').replace(/\/+$/, '');
     if (!base) throw new Error('не указан адрес API');
     var url = base + '/chat/completions';
     var model = cfg.model || 'gpt-4o-mini';
     var userContent = userText;
     if (/qwen3/i.test(model)) userContent += '\n/no_think';
+    if (strict) userContent += '\n\nВАЖНО: предыдущий ответ не был распознан. Ответь ТОЛЬКО валидным JSON, начиная с { и заканчивая } , без пояснений.';
     var payload = {
       model: model,
       messages: [
@@ -896,28 +919,79 @@
     var content = '';
     try { content = data.choices[0].message.content || ''; } catch (e4) {}
     if (!content) throw new Error('пустой ответ сервиса');
+    aiLastRawContent = content;
     return parseAiSuggestions(content, userText);
+  }
+
+  function tryParseJsonLoose(text) {
+    if (!text) return null;
+    var attempts = [text, text.replace(/,\s*([\]}])/g, '$1')];
+    for (var i = 0; i < attempts.length; i++) {
+      try { return JSON.parse(attempts[i]); } catch (e) {}
+    }
+    return null;
+  }
+
+  function extractJsonObjects(text) {
+    var out = [];
+    var depth = 0;
+    var start = -1;
+    var inStr = false;
+    var esc = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text.charAt(i);
+      if (inStr) {
+        if (esc) { esc = false; }
+        else if (ch === '\\') { esc = true; }
+        else if (ch === '"') { inStr = false; }
+        continue;
+      }
+      if (ch === '"') { inStr = true; continue; }
+      if (ch === '{') { if (depth === 0) start = i; depth++; }
+      else if (ch === '}') {
+        if (depth > 0) depth--;
+        if (depth === 0 && start !== -1) { out.push(text.slice(start, i + 1)); start = -1; }
+      }
+    }
+    return out;
   }
 
   function parseAiSuggestions(content, sourceText) {
     var s = String(content || '').trim();
-    var fence = /```(?:json)?\s*([\s\S]*?)```/.exec(s);
+    var fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(s);
     if (fence) s = fence[1].trim();
-    var data = null;
-    try {
-      data = JSON.parse(s);
-    } catch (e) {
-      var i = s.indexOf('{');
-      var j = s.lastIndexOf('}');
-      if (i !== -1 && j > i) {
-        try { data = JSON.parse(s.slice(i, j + 1)); } catch (e2) {}
-      }
+
+    var candidates = [s];
+    var i = s.indexOf('{');
+    var j = s.lastIndexOf('}');
+    if (i !== -1 && j > i) candidates.push(s.slice(i, j + 1));
+
+    var objs = extractJsonObjects(s);
+    var list = null;
+    for (var c = 0; c < candidates.length && !list; c++) {
+      var data = tryParseJsonLoose(candidates[c]);
+      if (data && Array.isArray(data.suggestions)) list = data.suggestions;
+      else if (data && typeof data === 'object' && (data.find !== undefined || data.replace !== undefined)) list = [data];
     }
-    if (!data || !Array.isArray(data.suggestions)) throw new Error('не удалось разобрать ответ ИИ');
+    if (!list && objs.length) {
+      var merged = [];
+      objs.forEach(function (o) {
+        var d = tryParseJsonLoose(o);
+        if (d && Array.isArray(d.suggestions)) merged = merged.concat(d.suggestions);
+        else if (d && typeof d === 'object' && (d.find !== undefined || d.replace !== undefined || d.title)) merged.push(d);
+      });
+      if (merged.length) list = merged;
+    }
+    if (!list) {
+      var err = new Error('не удалось разобрать ответ ИИ');
+      err.aiParse = true;
+      throw err;
+    }
+
     var out = [];
-    data.suggestions.forEach(function (it) {
+    list.forEach(function (it) {
       if (!it || typeof it !== 'object') return;
-      var type = String(it.type || 'tip');
+      var type = String(it.type || (it.find ? 'format' : 'tip'));
       var find = String(it.find || '');
       var replace = String(it.replace || '');
       if (type !== 'tip' && find && sourceText.indexOf(find) === -1) return;
@@ -941,18 +1015,37 @@
     aiBusy = true;
     setAiStatus('', 'Анализирую…');
     renderAiPanel();
-    try {
-      var result = await aiCall({ base: aiCfg.base, model: aiCfg.model, key: aiCfg.key }, text.slice(0, 8000));
+    var result = null;
+    var lastErr = null;
+    var attemptsLeft = 2;
+    while (attemptsLeft > 0 && !result) {
+      attemptsLeft--;
+      try {
+        result = await aiCall({ base: aiCfg.base, model: aiCfg.model, key: aiCfg.key }, text.slice(0, 8000), attemptsLeft === 0);
+      } catch (e) {
+        lastErr = e;
+        if (!e || !e.aiParse) break;
+        setAiStatus('', 'Ответ не распознан — пробую ещё раз…');
+        renderAiPanel();
+      }
+    }
+    if (result) {
       aiLastHash[note.id] = text;
       aiSuggestions[note.id] = result;
+      aiLastRaw[note.id] = aiLastRawContent;
+      aiHadError[note.id] = false;
       setAiStatus('ok', result.length ? ('Найдено подсказок: ' + result.length) : 'Замечаний нет — отлично!');
-    } catch (e) {
-      setAiStatus('error', e.message);
-      if (manual) toast('ИИ: ' + e.message, 'error');
-    } finally {
-      aiBusy = false;
-      renderAiPanel();
+    } else {
+      aiLastRaw[note.id] = aiLastRawContent;
+      aiHadError[note.id] = true;
+      var msg = (lastErr && lastErr.message) ? lastErr.message : 'неизвестная ошибка';
+      setAiStatus('error', msg);
+      if (manual) toast('ИИ: ' + msg, 'error');
     }
+    aiBusy = false;
+    renderAiPanel();
+    renderEditorOverlay();
+    updateAiPopup();
   }
 
   function aiApply(noteId, idx) {
@@ -982,12 +1075,156 @@
     list.splice(idx, 1);
     setAiStatus('ok', 'Применено: ' + aiItemTitle(s));
     renderAiPanel();
+    renderEditorOverlay();
+    hideAiPopup();
   }
 
   function aiDismiss(noteId, idx) {
     var list = aiSuggestions[noteId] || [];
     list.splice(idx, 1);
     renderAiPanel();
+    renderEditorOverlay();
+    hideAiPopup();
+  }
+
+  /* ----- подсветка подсказок прямо в тексте ----- */
+
+  function renderEditorOverlay() {
+    var ta = $('#editor');
+    var ov = $('#editor-overlay');
+    if (!ta || !ov) return;
+    var text = ta.value || '';
+    var note = currentId && getItem(currentId);
+    var items = (aiCfg && aiCfg.enabled && note && aiSuggestions[note.id]) || [];
+    aiDecoRanges = [];
+    var ranges = [];
+    items.forEach(function (s, k) {
+      if (!s.find) return;
+      var idx = text.indexOf(s.find);
+      if (idx === -1) return;
+      ranges.push({ start: idx, end: idx + s.find.length, k: k });
+    });
+    ranges.sort(function (a, b) { return a.start - b.start; });
+    var html = '';
+    var pos = 0;
+    ranges.forEach(function (r) {
+      if (r.start < pos) return;
+      var sType = AI_TYPE_LABELS[items[r.k].type] ? items[r.k].type : 'tip';
+      html += escapeHtml(text.slice(pos, r.start));
+      html += '<span class="ai-deco ' + sType + '" data-sugg="' + r.k + '">' + escapeHtml(text.slice(r.start, r.end)) + '</span>';
+      aiDecoRanges.push(r);
+      pos = r.end;
+    });
+    html += escapeHtml(text.slice(pos));
+    ov.innerHTML = html + '\n';
+    ov.scrollTop = ta.scrollTop;
+    ov.scrollLeft = ta.scrollLeft;
+  }
+
+  function syncOverlayScroll() {
+    var ta = $('#editor');
+    var ov = $('#editor-overlay');
+    if (ta && ov) { ov.scrollTop = ta.scrollTop; ov.scrollLeft = ta.scrollLeft; }
+  }
+
+  function hideAiPopup() {
+    var pop = $('#ai-popup');
+    if (pop) pop.classList.add('hidden');
+    aiPopupIdx = null;
+  }
+
+  function findDecoAt(pos) {
+    for (var i = 0; i < aiDecoRanges.length; i++) {
+      var r = aiDecoRanges[i];
+      if (pos >= r.start && pos <= r.end) return r;
+    }
+    for (var j = 0; j < aiDecoRanges.length; j++) {
+      var r2 = aiDecoRanges[j];
+      if (Math.abs(pos - r2.start) <= 1 || Math.abs(pos - r2.end) <= 1) return r2;
+    }
+    return null;
+  }
+
+  function showAiPopupForRange(r) {
+    var pop = $('#ai-popup');
+    var wrap = $('#editor-wrap');
+    var note = currentId && getItem(currentId);
+    if (!pop || !wrap || !note) return;
+    var s = (aiSuggestions[note.id] || [])[r.k];
+    if (!s) { hideAiPopup(); return; }
+    aiPopupIdx = r.k;
+    pop.innerHTML = '';
+    var head = document.createElement('div');
+    head.className = 'ai-popup-head';
+    var badge = document.createElement('span');
+    var typeKey = AI_TYPE_LABELS[s.type] ? s.type : 'tip';
+    badge.className = 'ai-badge ' + typeKey;
+    badge.textContent = AI_TYPE_LABELS[typeKey] || 'Совет';
+    var title = document.createElement('span');
+    title.className = 'ai-popup-title';
+    title.textContent = aiItemTitle(s);
+    head.appendChild(badge);
+    head.appendChild(title);
+    pop.appendChild(head);
+    if (s.explanation) {
+      var exp = document.createElement('div');
+      exp.className = 'ai-exp';
+      exp.textContent = s.explanation;
+      pop.appendChild(exp);
+    }
+    if (s.find) {
+      var sug = document.createElement('div');
+      sug.className = 'ai-popup-sug';
+      var lab = document.createElement('span');
+      lab.className = 'ai-popup-label';
+      lab.textContent = 'Предлагается: ';
+      var ghost = document.createElement('span');
+      ghost.className = 'ai-ghost';
+      ghost.textContent = truncate(s.replace, 160);
+      sug.appendChild(lab);
+      sug.appendChild(ghost);
+      pop.appendChild(sug);
+      var acts = document.createElement('div');
+      acts.className = 'ai-popup-actions';
+      var okBtn = document.createElement('button');
+      okBtn.className = 'ai-btn on';
+      okBtn.textContent = 'Применить';
+      okBtn.addEventListener('click', function () { aiApply(note.id, r.k); hideAiPopup(); });
+      var noBtn = document.createElement('button');
+      noBtn.className = 'ai-btn';
+      noBtn.textContent = 'Скрыть';
+      noBtn.addEventListener('click', function () { aiDismiss(note.id, r.k); hideAiPopup(); });
+      acts.appendChild(okBtn);
+      acts.appendChild(noBtn);
+      pop.appendChild(acts);
+    }
+    pop.classList.remove('hidden');
+    var mark = $('#editor-overlay').querySelector('.ai-deco[data-sugg="' + r.k + '"]');
+    var wrect = wrap.getBoundingClientRect();
+    var pw = pop.offsetWidth;
+    var ph = pop.offsetHeight;
+    var left = 12;
+    var top = 12;
+    if (mark) {
+      var mrect = mark.getBoundingClientRect();
+      left = Math.max(8, Math.min(mrect.left - wrect.left, wrect.width - pw - 8));
+      top = mrect.bottom - wrect.top + 6;
+      if (top + ph > wrect.height - 8 && (mrect.top - wrect.top - ph - 6) > 0) {
+        top = mrect.top - wrect.top - ph - 6;
+      }
+    }
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.top = Math.round(top) + 'px';
+  }
+
+  function updateAiPopup() {
+    var ta = $('#editor');
+    var pop = $('#ai-popup');
+    if (!ta || !pop) return;
+    if (!aiCfg || !aiCfg.enabled || viewMode === 'read') { hideAiPopup(); return; }
+    var r = findDecoAt(ta.selectionStart);
+    if (!r) { hideAiPopup(); return; }
+    showAiPopupForRange(r);
   }
 
   async function aiTestConnection() {
@@ -1481,6 +1718,8 @@
     updateStatus();
     updateActiveRow();
     renderAiPanel();
+    renderEditorOverlay();
+    hideAiPopup();
     try { localStorage.setItem(LS_SESSION, id); } catch (e) {}
   }
 
@@ -1655,6 +1894,7 @@
     try { localStorage.setItem(LS_VIEW, mode); } catch (e) {}
     updateStatus();
     if (mode !== 'edit') renderPreview();
+    hideAiPopup();
   }
 
   function cycleView() {
@@ -1694,6 +1934,8 @@
     afterInputDebounced();
     updateStatus();
     scheduleAiCheck();
+    hideAiPopup();
+    renderEditorOverlay();
   }
 
   var afterInputDebounced = debounce(function () {
@@ -1702,6 +1944,7 @@
     renderMeta();
     renderBacklinks();
     renderTagsPanel();
+    renderEditorOverlay();
   }, 180);
 
   function insertTextAt(text, start, end) {
@@ -2272,6 +2515,18 @@
         insertTextAt('  ', start, end);
       }
     });
+    $('#editor').addEventListener('scroll', function () { syncOverlayScroll(); updateAiPopup(); });
+    $('#editor').addEventListener('keyup', function () { updateAiPopup(); });
+    $('#editor').addEventListener('click', function () { updateAiPopup(); });
+    document.addEventListener('selectionchange', function () {
+      var ta = $('#editor');
+      if (document.activeElement === ta) updateAiPopup();
+    });
+    document.addEventListener('mousedown', function (e) {
+      if (!e.target || !e.target.closest) return;
+      if (e.target.closest('#ai-popup') || e.target.closest('#editor-wrap')) return;
+      hideAiPopup();
+    });
 
     // панель инструментов (не крадём фокус у редактора)
     $('#toolbar').addEventListener('mousedown', function (e) { e.preventDefault(); });
@@ -2415,6 +2670,8 @@
       saveAiCfg();
       setAiFormStatus('ok', 'Сохранено');
       renderAiPanel();
+      renderEditorOverlay();
+      hideAiPopup();
       if (aiCfg.enabled && aiCfg.auto) scheduleAiCheck();
       toast('Настройки ИИ сохранены', 'ok');
     });
@@ -2498,6 +2755,7 @@
     renderTree();
     renderTagsPanel();
     renderAiPanel();
+    renderEditorOverlay();
 
     var savedView = null;
     try { savedView = localStorage.getItem(LS_VIEW); } catch (e) {}
