@@ -95,7 +95,7 @@ function makeDirHandle(p, name) {
   };
 }
 
-let APP_VERSION = '0.4.0';
+let APP_VERSION = '0.4.1';
 try {
   APP_VERSION = require(path.join(__dirname, 'package.json')).version || APP_VERSION;
 } catch (e) { /* ок */ }
@@ -166,7 +166,7 @@ function injectShell() {
   bar.id = 'gd-titlebar';
   bar.setAttribute('aria-hidden', 'true');
   bar.innerHTML =
-    '<span class="gd-tb-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2.5 21.5 12 12 21.5 2.5 12z"/><path d="M12 2.5v19M2.5 12h19"/></svg></span>' +
+    '<span class="gd-tb-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2.5 21.5 12 12 21.5 2.5 12z"/><path d="M12 7.4 16.6 12 12 16.6 7.4 12z" opacity="0.65"/></svg></span>' +
     '<span class="gd-tb-title">Графит</span>';
   document.body.prepend(bar);
 
