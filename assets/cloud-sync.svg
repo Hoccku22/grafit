@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 520" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b7bf7"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1400" height="520" rx="20" fill="#17171b"/>
+  <rect x="0.5" y="0.5" width="1399" height="519" rx="20" fill="none" stroke="#2e2e35"/>
+
+  <text x="60" y="66" font-size="28" font-weight="700" fill="#e8e8ee">Облачная синхронизация — просто, без токенов</text>
+  <text x="60" y="100" font-size="14.5" fill="#9a9aa3">«Графит» работает с папкой на компьютере, а синхронизацию между устройствами делает штатный клиент облака.</text>
+
+  <rect x="70" y="160" width="360" height="250" rx="14" fill="#1f1f26" stroke="#33333c"/>
+  <text x="94" y="204" font-size="17" font-weight="700" fill="#dcdce2">Компьютер A</text>
+  <text x="94" y="238" font-size="14" fill="#c9c9d2">«Графит» — это приложение</text>
+  <text x="94" y="264" font-size="12.5" fill="#8a8a94">читает и пишет .md-файлы в папке</text>
+  <text x="94" y="288" font-size="12.5" fill="#8a8a94">папку облака выбираете вы</text>
+  <text x="94" y="312" font-size="12.5" fill="#8a8a94">сохраняет правки на лету</text>
+
+  <rect x="520" y="160" width="360" height="250" rx="14" fill="#1f1f26" stroke="#5b4dc0"/>
+  <text x="700" y="204" font-size="17" font-weight="700" fill="#e8e8ee" text-anchor="middle">Облако</text>
+  <text x="700" y="238" font-size="12.5" fill="#8a8a94" text-anchor="middle">Яндекс.Диск · Google Drive · Dropbox</text>
+  <text x="700" y="262" font-size="12.5" fill="#8a8a94" text-anchor="middle">OneDrive · Nextcloud · MEGA · pCloud · …</text>
+  <text x="700" y="292" font-size="12.5" fill="#8a8a94" text-anchor="middle">хранит версии и решает конфликты</text>
+  <text x="700" y="316" font-size="12.5" fill="#8a8a94" text-anchor="middle">работает на всех ваших устройствах</text>
+
+  <rect x="970" y="160" width="360" height="250" rx="14" fill="#1f1f26" stroke="#33333c"/>
+  <text x="994" y="204" font-size="17" font-weight="700" fill="#dcdce2">Компьютер B</text>
+  <text x="994" y="238" font-size="14" fill="#c9c9d2">то же «Графит»</text>
+  <text x="994" y="264" font-size="12.5" fill="#8a8a94">изменения приходят сами</text>
+  <text x="994" y="288" font-size="12.5" fill="#8a8a94">можно править и с телефона —</text>
+  <text x="994" y="312" font-size="12.5" fill="#8a8a94">любым редактором Markdown</text>
+
+  <line x1="440" y1="285" x2="510" y2="285" stroke="#8b7bf7" stroke-opacity="0.8" stroke-width="2" marker-start="url(#arr2)" marker-end="url(#arr2)"/>
+  <text x="475" y="270" font-size="10" fill="#8a8a94" text-anchor="middle">синхронизация</text>
+
+  <line x1="890" y1="285" x2="960" y2="285" stroke="#8b7bf7" stroke-opacity="0.8" stroke-width="2" marker-start="url(#arr2)" marker-end="url(#arr2)"/>
+  <text x="925" y="270" font-size="10" fill="#8a8a94" text-anchor="middle">синхронизация</text>
+
+  <text x="700" y="470" font-size="12.5" fill="#6f6f78" text-anchor="middle">Без OAuth-токенов и аккаунтов внутри приложения: доступ есть только к папке, которую вы выбрали сами.</text>
+</svg>
