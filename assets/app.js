@@ -363,6 +363,7 @@
         if (exp) toast('Папка «' + root.name + '» не похожа на ' + exp.label + ' — проверьте, что выбрали папку облака', 'error');
       }
       try { await idbSet('diskRoot', root); } catch (e) { /* не критично */ }
+      try { if (root && root.__path) localStorage.setItem('vault.diskPath', root.__path); } catch (e2) { /* не критично */ }
     } catch (e) {
       if (e && e.name === 'AbortError') return;
       toast('Не удалось открыть папку: ' + (e && e.message ? e.message : e), 'error');
@@ -372,10 +373,20 @@
   async function tryRestoreDisk() {
     if (!FSA_OK) return;
     var root = null;
-    try { root = await idbGet('diskRoot'); } catch (e) { return; }
+    try { root = await idbGet('diskRoot'); } catch (e) { root = null; }
+    if (!root && window.__grafitDesktop) {
+      var savedPath = null;
+      try { savedPath = localStorage.getItem('vault.diskPath'); } catch (e2) {}
+      if (savedPath) {
+        try {
+          if (await window.__grafitDesktop.exists(savedPath)) root = window.__grafitDesktop.makeHandle(savedPath);
+        } catch (e3) {}
+      }
+    }
     if (!root) return;
     try {
-      var perm = await root.queryPermission({ mode: 'readwrite' });
+      var perm = 'granted';
+      if (root.queryPermission) perm = await root.queryPermission({ mode: 'readwrite' });
       if (perm === 'granted') await activateDisk(root);
       else showReconnect(root);
     } catch (e) { /* игнорируем */ }
@@ -399,6 +410,7 @@
     disk = null;
     vaultMode = 'browser';
     idbDel('diskRoot').catch(function () {});
+    try { localStorage.removeItem('vault.diskPath'); } catch (e) {}
     updateStatus();
   }
 
