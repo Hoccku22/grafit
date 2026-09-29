@@ -701,6 +701,8 @@ kbd {
   box-shadow: var(--shadow);
   padding: 5px;
   min-width: 240px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
 }
 .menu-item {
   display: flex; align-items: center; gap: 10px;

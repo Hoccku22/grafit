@@ -2431,8 +2431,13 @@
     if (!pop.classList.contains('hidden')) { closeMenu(); return; }
     var r = $('#rb-menu').getBoundingClientRect();
     pop.classList.remove('hidden');
-    pop.style.left = Math.round(r.right + 8) + 'px';
-    pop.style.top = Math.round(Math.max(8, r.top - 6)) + 'px';
+    // меню всегда помещается в окно: прижимаем к краям по обеим осям
+    var pw = pop.offsetWidth;
+    var ph = pop.offsetHeight;
+    var left = Math.min(r.right + 8, window.innerWidth - pw - 8);
+    var top = Math.min(Math.max(8, r.top - 6), window.innerHeight - ph - 8);
+    pop.style.left = Math.round(Math.max(8, left)) + 'px';
+    pop.style.top = Math.round(Math.max(8, top)) + 'px';
   }
 
   /* ---------- фирменные диалоги (вместо системных окон) ---------- */
@@ -2528,6 +2533,7 @@
     $('#rb-theme').addEventListener('click', toggleTheme);
     $('#rb-help').addEventListener('click', function () { $('#about-modal').classList.add('open'); });
     $('#rb-menu').addEventListener('click', function () { toggleMenu(); });
+    window.addEventListener('resize', function () { closeMenu(); });
 
     // боковая панель
     $('#sb-new-note').addEventListener('click', function () { createNote({}); });
