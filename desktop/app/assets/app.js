@@ -338,6 +338,7 @@
     if (note) openNote(note); else showPlaceholder(true);
     savedAt = Date.now();
     lastDiskCheck = Date.now();
+    startDiskWatch();
     updateStatus();
     var prov = disk.provider;
     toast(prov
@@ -409,6 +410,7 @@
   function detachDisk() {
     disk = null;
     vaultMode = 'browser';
+    stopDiskWatch();
     idbDel('diskRoot').catch(function () {});
     try { localStorage.removeItem('vault.diskPath'); } catch (e) {}
     updateStatus();
@@ -459,17 +461,43 @@
 
   /* ---------- синхронизация с облачной папкой ---------- */
 
+  /* ----- Мгновенный отклик папки (десктоп): следим за файлами ----- */
+
+  function startDiskWatch() {
+    try {
+      if (window.__grafitDesktop && window.__grafitDesktop.watchStart && disk && disk.root && disk.root.__path) {
+        window.__grafitDesktop.watchStart(disk.root.__path);
+      }
+    } catch (e) { /* не критично */ }
+  }
+
+  function stopDiskWatch() {
+    try { if (window.__grafitDesktop && window.__grafitDesktop.watchStop) window.__grafitDesktop.watchStop(); } catch (e) { /* не критично */ }
+  }
+
+  var lastWatchSync = 0;
+  function watchDiskSync() {
+    if (vaultMode !== 'disk' || !disk) return;
+    var now = Date.now();
+    if (now - lastWatchSync < 900) return;
+    lastWatchSync = now;
+    lightDiskSync('watch');
+  }
+
+  window.addEventListener('grafit-disk-changed', function () { watchDiskSync(); });
+
   async function lightDiskSync(manual) {
     if (vaultMode !== 'disk' || !disk) {
-      if (manual) {
+      if (manual === true) {
         toast('Сначала подключите облако или папку на диске');
         openCloudWizard();
       }
       return;
     }
+    var isAuto = (manual !== true && manual !== 'watch');
     var now = Date.now();
-    if (!manual && (now - lastDiskCheck < 30000)) return;
-    if (!manual && document.hidden) return;
+    if (isAuto && (now - lastDiskCheck < 30000)) return;
+    if (isAuto && document.hidden) return;
     lastDiskCheck = now;
 
     var changed = 0;
@@ -507,7 +535,7 @@
       renderTagsPanel();
       updateStatus();
       toast('☁️ Из папки подтянуто: изменено ' + changed + ', добавлено ' + added, 'ok');
-    } else if (manual) {
+    } else if (manual === true) {
       toast('Изменений нет — всё уже синхронизировано', 'ok');
     }
   }

@@ -29,7 +29,7 @@
   .sec{margin-top:54px}
   .sec-note{color:var(--muted);font-size:13.5px;margin-bottom:20px}
 
-  .done-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .done-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
   .done-card{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--green);border-radius:12px;padding:16px 16px 14px}
   .done-card h3{font-size:15px;margin-bottom:6px}
   .done-card p{color:var(--dim);font-size:13.5px;line-height:1.55}
@@ -103,8 +103,8 @@
     Графит · план развития
   </div>
   <h1>Роадмап с оценками</h1>
-  <div class="sub">Версия <b>0.3.0</b> (сайт: <b>1.11</b>) · 29 сентября 2026 · <b>важность</b> отвечает на вопрос «насколько это нужно», <b>сложность</b> — «сколько работы»</div>
-  <div class="progress"><span class="pill p-done">выполнено 1 из 7</span></div>
+  <div class="sub">Версия <b>0.4.0</b> (сайт: <b>1.12</b>) · 29 сентября 2026 · <b>важность</b> отвечает на вопрос «насколько это нужно», <b>сложность</b> — «сколько работы»</div>
+  <div class="progress"><span class="pill p-done">выполнено 2 из 7</span></div>
 
   <p class="intro">Порядок работ строится по простому правилу: сначала <b>важное и недорогое</b>, потом важное и крупное, затем всё остальное. Ниже — карта приоритетов, оценки по каждому пункту и рекомендуемая последовательность.</p>
 
@@ -132,6 +132,11 @@
         <h3>Быстрая заметка</h3>
         <p>Ctrl+Alt+N из любой программы: мини-окно поверх всех окон, Ctrl+Enter — сохранить, Esc — спрятать. Значок в трее, закрытие — в трей.</p>
       </div>
+      <div class="done-card">
+        <span class="tag tag-done">сделано · 0.4.0</span>
+        <h3>Мгновенный отклик папки</h3>
+        <p>Изменения файлов из облака или другой программы подхватываются сразу — без переключения окна. Подтянутые заметки отмечаются тостом.</p>
+      </div>
     </div>
   </section>
 
@@ -147,7 +152,7 @@
         <div class="qcell bl">небольшие улучшения</div>
         <div class="qcell br">позже</div>
         <span class="dot imp-high done" style="left:21%;top:24%"><span class="dd">1</span><span class="lbl">Быстрая заметка · готово</span></span>
-        <span class="dot imp-high" style="left:58%;top:30%"><span class="dd">2</span><span class="lbl">Отклик папки</span></span>
+        <span class="dot imp-high done" style="left:58%;top:30%"><span class="dd">2</span><span class="lbl">Отклик папки · готово</span></span>
         <span class="dot imp-high" style="left:82%;top:16%"><span class="dd">3</span><span class="lbl">Подсказки в строке</span></span>
         <span class="dot imp-mid" style="left:24%;top:62%"><span class="dd">4</span><span class="lbl">Поделиться ссылкой</span></span>
         <span class="dot imp-mid" style="left:62%;top:60%"><span class="dd">5</span><span class="lbl">История версий</span></span>
@@ -176,8 +181,8 @@
       </tr>
       <tr>
         <td>2</td>
-        <td><b>Мгновенный отклик папки</b></td>
-        <td>Изменения файлов в облаке или другой программе подхватываются сразу, а не при возврате к окну. Убирает единственное ручное действие в синхронизации.</td>
+        <td><b>Мгновенный отклик папки</b> <span class="pill p-done">сделано в 0.4.0</span></td>
+        <td>Изменения файлов подхватываются мгновенно — программа следит за папкой; без переключения окна. Выпущено 29.09.2026.</td>
         <td><span class="pill p-high">высокая</span></td>
         <td><span class="pill s-mid">средняя</span></td>
       </tr>
@@ -218,7 +223,7 @@
       </tr>
     </table>
     <div class="order-note">
-      <b>Рекомендуемый порядок:</b> пункт 1 уже готов — в версии 0.3.0. Следом — пункты 2 (ощущается сразу) и 3 (крупный шаг), затем 4–7 по мере интереса. Оценки можно пересматривать: роадмап живой.
+      <b>Рекомендуемый порядок:</b> пункты 1 и 2 уже готовы — в версиях 0.3.0 и 0.4.0. Следом — пункт 3 (крупный шаг), затем 4–7 по мере интереса. Оценки можно пересматривать: роадмап живой.
     </div>
   </section>
 

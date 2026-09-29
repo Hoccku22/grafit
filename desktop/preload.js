@@ -95,7 +95,7 @@ function makeDirHandle(p, name) {
   };
 }
 
-let APP_VERSION = '0.3.0';
+let APP_VERSION = '0.4.0';
 try {
   APP_VERSION = require(path.join(__dirname, 'package.json')).version || APP_VERSION;
 } catch (e) { /* ок */ }
@@ -119,8 +119,17 @@ window.__grafitDesktop = {
   makeHandle: function (p) { return makeDirHandle(p); },
   exists: function (p) { return ipcRenderer.invoke('fs:exists', p); },
   engineStatus: function () { return ipcRenderer.invoke('engine:status'); },
-  engineRestart: function () { return ipcRenderer.invoke('engine:restart'); }
+  engineRestart: function () { return ipcRenderer.invoke('engine:restart'); },
+  watchStart: function (p) { return ipcRenderer.invoke('watch:start', p); },
+  watchStop: function () { return ipcRenderer.invoke('watch:stop'); }
 };
+
+// Мгновенный отклик папки: главный процесс сообщает об изменениях файлов
+try {
+  ipcRenderer.on('watch:changed', function () {
+    try { window.dispatchEvent(new CustomEvent('grafit-disk-changed')); } catch (e) { /* ок */ }
+  });
+} catch (e) { /* ок */ }
 
 // Подмена File System Access API: системный диалог + IPC-файлы
 window.showDirectoryPicker = async function () {

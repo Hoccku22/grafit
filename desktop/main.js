@@ -17,13 +17,18 @@ const { spawn } = require('child_process');
 
 const SMOKE = process.argv.includes('--smoke');
 const QUICK_TEST = process.argv.includes('--quick-test');
+const SYNC_TEST = process.argv.includes('--sync-test');
+const SYNC_VAULT_ARG = process.argv.find(function (a) { return a.indexOf('--sync-vault=') === 0; });
+const SYNC_VAULT = SYNC_VAULT_ARG ? SYNC_VAULT_ARG.slice(SYNC_VAULT_ARG.indexOf('=') + 1) : null;
 const QSHOT_ARG = process.argv.find(function (a) { return a.indexOf('--quick-shot=') === 0; });
 const QSHOT_PATH = QSHOT_ARG ? QSHOT_ARG.slice(QSHOT_ARG.indexOf('=') + 1) : null;
+const SYNC_SHOT_ARG = process.argv.find(function (a) { return a.indexOf('--sync-shot=') === 0; });
+const SYNC_SHOT_PATH = SYNC_SHOT_ARG ? SYNC_SHOT_ARG.slice(SYNC_SHOT_ARG.indexOf('=') + 1) : null;
 const SHOT_ARG = process.argv.find(function (a) { return a.indexOf('--shot=') === 0; });
 const SHOT_PATH = SHOT_ARG ? SHOT_ARG.slice(SHOT_ARG.indexOf('=') + 1) : (SMOKE ? path.join(appRootSafe(), 'shot.png') : null);
 const OUT_ARG = process.argv.find(function (a) { return a.indexOf('--smoke-out=') === 0; });
 const OUT_PATH = OUT_ARG ? OUT_ARG.slice(OUT_ARG.indexOf('=') + 1) : null;
-if (SMOKE || QUICK_TEST) app.disableHardwareAcceleration();
+if (SMOKE || QUICK_TEST || SYNC_TEST) app.disableHardwareAcceleration();
 
 function appRootSafe() { try { return __dirname; } catch (e) { return '.'; } }
 
@@ -38,6 +43,8 @@ let tray = null;
 let quickWin = null;
 let isQuitting = false;
 let hotkeyDisplay = '';
+let diskWatcher = null;
+let watchDebounceTimer = null;
 
 const CONFIG_NAME = 'grafit.config.json';
 const BAR_H = 34;
@@ -120,7 +127,7 @@ async function isOllamaUp() {
 }
 
 async function startEngine() {
-  if (SMOKE || QUICK_TEST) return;
+  if (SMOKE || QUICK_TEST || SYNC_TEST) return;
   if (await isOllamaUp()) {
     console.log('[engine] Ollama уже запущена — используем её');
     return;
@@ -156,7 +163,7 @@ function createWindow() {
     height: 840,
     minWidth: 880,
     minHeight: 620,
-    show: !SMOKE && !QUICK_TEST,
+    show: !SMOKE && !QUICK_TEST && !SYNC_TEST,
     backgroundColor: '#1e1e21',
     title: 'Графит',
     autoHideMenuBar: true,
@@ -251,6 +258,54 @@ function createWindow() {
         console.log('QUICK_TEST_RESULT ' + JSON.stringify(res, null, 2));
         app.exit(res.steps && res.steps.saved ? 0 : 1);
       }, 2400);
+    });
+  }
+  if (SYNC_TEST) {
+    let phase = 0;
+    win.webContents.on('did-finish-load', function () {
+      phase++;
+      if (phase === 1) {
+        (async function () {
+          try {
+            await win.webContents.executeJavaScript(
+              'localStorage.setItem("vault.diskPath", ' + JSON.stringify(SYNC_VAULT) + ');' +
+              'localStorage.setItem("vault.obsidian.style.v1", JSON.stringify({ version: 1, items: {}, trash: [] })); true'
+            );
+          } catch (e) { /* ок */ }
+          setTimeout(function () { try { win.webContents.reload(); } catch (e) { /* ок */ } }, 500);
+        })();
+      } else if (phase === 2) {
+        setTimeout(async function () {
+          const res = { steps: {} };
+          try {
+            res.steps.userData = app.getPath('userData');
+            res.steps.mode = await win.webContents.executeJavaScript('window.__appInfo().mode');
+            res.steps.watcher = !!diskWatcher;
+            res.steps.notesAfterBoot = await win.webContents.executeJavaScript('window.__appInfo().notes');
+            fs.writeFileSync(path.join(SYNC_VAULT, 'Внешняя заметка.md'), '# Внешняя заметка\n\nприлетела из облака\n', 'utf8');
+            await new Promise(function (r) { setTimeout(r, 2800); });
+            res.steps.notesAfterExternal = await win.webContents.executeJavaScript('window.__appInfo().notes');
+            res.steps.treeHasExternal = await win.webContents.executeJavaScript('(function(){ return [].some.call(document.querySelectorAll("#file-tree .item-label"), function(e){ return e.textContent.indexOf("Внешняя заметка") !== -1; }); })()');
+            fs.writeFileSync(path.join(SYNC_VAULT, 'Альфа.md'), '# Альфа\n\nобновлено снаружи!\n', 'utf8');
+            await new Promise(function (r) { setTimeout(r, 2800); });
+            await win.webContents.executeJavaScript('(function(){ var rows=document.querySelectorAll("#file-tree .tree-row"); for (var i=0;i<rows.length;i++){ var lab=rows[i].querySelector(".item-label"); if(lab && lab.textContent==="Альфа"){ rows[i].click(); return true; } } return false; })()');
+            await new Promise(function (r) { setTimeout(r, 400); });
+            res.steps.alphaText = await win.webContents.executeJavaScript('document.getElementById("editor").value.indexOf("обновлено снаружи") !== -1');
+            if (SYNC_SHOT_PATH) {
+              try {
+                const img = await win.webContents.capturePage();
+                fs.writeFileSync(SYNC_SHOT_PATH, img.toPNG());
+                console.log('SYNC_SHOT ' + SYNC_SHOT_PATH);
+              } catch (e2) { console.log('SYNC_SHOT_ERR ' + (e2 && e2.message)); }
+            }
+            await new Promise(function (r) { setTimeout(r, 1500); });
+            res.steps.notesStable = (await win.webContents.executeJavaScript('window.__appInfo().notes')) === res.steps.notesAfterExternal;
+          } catch (e) { res.err = String(e && e.message); }
+          console.log('SYNC_TEST_RESULT ' + JSON.stringify(res, null, 2));
+          const ok = res.steps.mode === 'disk' && res.steps.watcher === true && res.steps.notesAfterExternal === res.steps.notesAfterBoot + 1 && res.steps.treeHasExternal === true && res.steps.alphaText === true && res.steps.notesStable === true;
+          app.exit(ok ? 0 : 1);
+        }, 3000);
+      }
     });
   }
   return win;
@@ -376,6 +431,40 @@ async function quickSave(text) {
   } catch (e) { return { ok: false, err: String(e && e.message) }; }
 }
 
+/* ---------- Мгновенный отклик папки: слежение за файлами ---------- */
+
+function stopDiskWatch() {
+  if (diskWatcher) {
+    try { diskWatcher.close(); } catch (e) { /* ок */ }
+    diskWatcher = null;
+    console.log('[watch] остановлен');
+  }
+  if (watchDebounceTimer) { clearTimeout(watchDebounceTimer); watchDebounceTimer = null; }
+}
+
+function startDiskWatch(dir) {
+  stopDiskWatch();
+  try {
+    if (!dir || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return { ok: false, err: 'not-a-dir' };
+  } catch (e) { return { ok: false, err: 'stat-failed' }; }
+  try {
+    diskWatcher = fs.watch(dir, { recursive: true }, function (evt, fname) {
+      if (watchDebounceTimer) clearTimeout(watchDebounceTimer);
+      watchDebounceTimer = setTimeout(function () {
+        watchDebounceTimer = null;
+        if (mainWin && !mainWin.isDestroyed()) {
+          try { mainWin.webContents.send('watch:changed', String(fname || '')); } catch (e) { /* ок */ }
+        }
+      }, 550);
+    });
+    console.log('[watch] следим за ' + dir);
+    return { ok: true, dir: dir };
+  } catch (e) {
+    console.log('[watch] ошибка: ' + (e && e.message));
+    return { ok: false, err: String(e && e.message) };
+  }
+}
+
 /* Цвет системных кнопок окна следует за темой приложения */
 ipcMain.on('shell:theme', function (ev, theme) {
   if (!mainWin || process.platform !== 'win32') return;
@@ -388,10 +477,10 @@ ipcMain.on('shell:theme', function (ev, theme) {
 
 /* Защита от двух окон: второй запуск показывает уже открытое окно.
    (Две копии, работающие с одним хранилищем, могли бы затирать правки друг друга.) */
-const gotSingleLock = (SMOKE || QUICK_TEST) ? true : app.requestSingleInstanceLock();
+const gotSingleLock = (SMOKE || QUICK_TEST || SYNC_TEST) ? true : app.requestSingleInstanceLock();
 if (!gotSingleLock) {
   app.quit();
-} else if (!SMOKE && !QUICK_TEST) {
+} else if (!SMOKE && !QUICK_TEST && !SYNC_TEST) {
   app.on('second-instance', function () {
     showMain();
   });
@@ -464,9 +553,13 @@ app.whenReady().then(async function () {
   ipcMain.handle('qn:hide', function () { if (quickWin && !quickWin.isDestroyed()) quickWin.hide(); });
   ipcMain.handle('qn:info', function () { return { hotkey: hotkeyDisplay, packaged: app.isPackaged }; });
 
+  // Мгновенный отклик папки
+  ipcMain.handle('watch:start', function (ev, dir) { return startDiskWatch(String(dir || '')); });
+  ipcMain.handle('watch:stop', function () { stopDiskWatch(); return true; });
+
   await startEngine();
   createWindow();
-  if (!SMOKE) {
+  if (!SMOKE && !SYNC_TEST) {
     createTray();
     registerHotkey();
   }
@@ -481,6 +574,7 @@ app.on('will-quit', function () {
 });
 app.on('before-quit', function () {
   isQuitting = true;
+  stopDiskWatch();
   stopEngine();
 });
 app.on('window-all-closed', function () {
