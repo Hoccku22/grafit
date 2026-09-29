@@ -101,6 +101,12 @@
   var dirty = {};
   var lastDiskCheck = 0;
   var cloudChoice = 'yandex';
+  var aiCfg = null;
+  var aiBusy = false;
+  var aiTimer = null;
+  var aiLastHash = {};
+  var aiSuggestions = {};
+  var aiLastRun = 0;
 
   /* ---------- IndexedDB (для хранения дескриптора папки) ---------- */
 
@@ -639,6 +645,371 @@
     else toast('Переносить было нечего или нет доступа к папке', 'error');
   }
 
+  /* ---------- ИИ-помощник ---------- */
+
+  var AI_PRESETS = {
+    openrouter: { base: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
+    openai: { base: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+    groq: { base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
+    ollama: { base: 'http://localhost:11434/v1', model: 'llama3.1' },
+    custom: { base: '', model: '' }
+  };
+
+  var AI_TYPE_LABELS = { typo: 'Орфография', format: 'Форматирование', structure: 'Структура', definition: 'Определение', tip: 'Совет' };
+
+  function defaultAiCfg() {
+    return { enabled: false, auto: true, provider: 'openrouter', base: AI_PRESETS.openrouter.base, model: AI_PRESETS.openrouter.model, key: '' };
+  }
+
+  function loadAiCfg() {
+    aiCfg = defaultAiCfg();
+    try {
+      var raw = localStorage.getItem('vault.ai');
+      if (raw) {
+        var data = JSON.parse(raw);
+        if (data && typeof data === 'object') {
+          if (typeof data.enabled === 'boolean') aiCfg.enabled = data.enabled;
+          if (typeof data.auto === 'boolean') aiCfg.auto = data.auto;
+          if (data.provider) aiCfg.provider = String(data.provider);
+          if (data.base) aiCfg.base = String(data.base);
+          if (data.model) aiCfg.model = String(data.model);
+          if (data.key) aiCfg.key = String(data.key);
+        }
+      }
+    } catch (e) { /* нет сохранённых настроек */ }
+    return aiCfg;
+  }
+
+  function saveAiCfg() {
+    try { localStorage.setItem('vault.ai', JSON.stringify(aiCfg)); } catch (e) {}
+  }
+
+  function setAiStatus(kind, text) {
+    var el = $('#ai-status-line');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'ai-status-line' + (kind ? ' ' + kind : '');
+  }
+
+  function setAiFormStatus(kind, text) {
+    var el = $('#ai-form-status');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'ai-status-line' + (kind ? ' ' + kind : '');
+  }
+
+  function openAiSettings() {
+    if (!aiCfg) loadAiCfg();
+    $('#ai-enabled').checked = !!aiCfg.enabled;
+    $('#ai-provider').value = aiCfg.provider || 'openrouter';
+    $('#ai-base').value = aiCfg.base || '';
+    $('#ai-model').value = aiCfg.model || '';
+    $('#ai-key').value = aiCfg.key || '';
+    setAiFormStatus('', '');
+    $('#ai-modal').classList.add('open');
+  }
+
+  function readAiForm() {
+    return {
+      enabled: $('#ai-enabled').checked,
+      auto: aiCfg ? !!aiCfg.auto : true,
+      provider: $('#ai-provider').value || 'custom',
+      base: $('#ai-base').value.trim(),
+      model: $('#ai-model').value.trim(),
+      key: $('#ai-key').value.trim()
+    };
+  }
+
+  function aiApplyPreset(id) {
+    var p = AI_PRESETS[id];
+    if (!p) return;
+    if (p.base) $('#ai-base').value = p.base;
+    if (p.model) $('#ai-model').value = p.model;
+  }
+
+  function aiItemTitle(s) {
+    return s.title || AI_TYPE_LABELS[s.type] || 'Совет';
+  }
+
+  function renderAiPanel() {
+    var block = $('#ai-block');
+    if (!block) return;
+    if (!aiCfg) loadAiCfg();
+    block.classList.toggle('hidden', !aiCfg.enabled);
+    var autoBtn = $('#ai-auto');
+    if (autoBtn) {
+      autoBtn.textContent = aiCfg.auto ? 'Авто: вкл' : 'Авто: выкл';
+      autoBtn.classList.toggle('on', !!aiCfg.auto);
+    }
+    var list = $('#ai-suggestions');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!aiCfg.enabled) return;
+
+    var note = currentId && getItem(currentId);
+    var items = (note && aiSuggestions[note.id]) || [];
+    var cnt = $('#ai-count');
+    if (cnt) {
+      cnt.textContent = String(items.length);
+      cnt.classList.toggle('hidden', !items.length);
+    }
+
+    if (aiBusy) {
+      list.innerHTML = '<div class="empty">Анализирую текст…</div>';
+      return;
+    }
+    if (!note) {
+      list.innerHTML = '<div class="empty">Откройте заметку — помогу с текстом.</div>';
+      return;
+    }
+    if (!items.length) {
+      list.innerHTML = '<div class="empty">Пока всё чисто. Пишите — подсказки появятся сами.</div>';
+      return;
+    }
+
+    items.forEach(function (s, i) {
+      var card = document.createElement('div');
+      card.className = 'ai-item';
+
+      var head = document.createElement('div');
+      head.className = 'ai-item-head';
+      var badge = document.createElement('span');
+      var typeKey = AI_TYPE_LABELS[s.type] ? s.type : 'tip';
+      badge.className = 'ai-badge ' + typeKey;
+      badge.textContent = AI_TYPE_LABELS[typeKey] || 'Совет';
+      var title = document.createElement('span');
+      title.className = 'ai-title';
+      title.textContent = aiItemTitle(s);
+      head.appendChild(badge);
+      head.appendChild(title);
+      card.appendChild(head);
+
+      if (s.explanation) {
+        var exp = document.createElement('div');
+        exp.className = 'ai-exp';
+        exp.textContent = s.explanation;
+        card.appendChild(exp);
+      }
+
+      if (s.find) {
+        var prev = document.createElement('div');
+        prev.className = 'ai-preview';
+        var del = document.createElement('del');
+        del.textContent = truncate(s.find, 90);
+        var arrow = document.createElement('span');
+        arrow.textContent = ' → ';
+        var ins = document.createElement('ins');
+        ins.textContent = truncate(s.replace || '…', 120);
+        prev.appendChild(del);
+        prev.appendChild(arrow);
+        prev.appendChild(ins);
+        card.appendChild(prev);
+      }
+
+      var actions = document.createElement('div');
+      actions.className = 'ai-actions';
+      if (s.find) {
+        var applyBtn = document.createElement('button');
+        applyBtn.className = 'ai-btn';
+        applyBtn.textContent = 'Применить';
+        applyBtn.addEventListener('click', function () { aiApply(note.id, i); });
+        actions.appendChild(applyBtn);
+      }
+      var skipBtn = document.createElement('button');
+      skipBtn.className = 'ai-btn';
+      skipBtn.textContent = 'Скрыть';
+      skipBtn.addEventListener('click', function () { aiDismiss(note.id, i); });
+      actions.appendChild(skipBtn);
+      card.appendChild(actions);
+
+      list.appendChild(card);
+    });
+  }
+
+  function scheduleAiCheck() {
+    if (!aiCfg || !aiCfg.enabled || !aiCfg.auto || !aiCfg.key) return;
+    clearTimeout(aiTimer);
+    aiTimer = setTimeout(function () { aiAnalyze(false); }, 3500);
+  }
+
+  function buildAiPrompt() {
+    return [
+      'Ты — аккуратный ассистент-редактор заметок в приложении «Графит» (Markdown, русский язык).',
+      'Проанализируй текст ниже и предложи точечные улучшения.',
+      '',
+      'Отвечай СТРОГО одним JSON-объектом, без пояснений и без markdown-обёрток:',
+      '{"suggestions":[{"type":"typo|format|structure|definition|tip","title":"короткий заголовок","explanation":"1 предложение — зачем","find":"точный фрагмент исходного текста","replace":"чем заменить"}]}',
+      '',
+      'Правила:',
+      '- find — ТОЧНАЯ короткая подстрока исходного текста (скопируй как есть); replace — готовая замена.',
+      '- typo — орфография, опечатки, пунктуация; только реальные ошибки.',
+      '- format — оформление Markdown: пробелы после #, - или цифр, списки, выделение, лишние пустые строки.',
+      '- structure — структура: добавить заголовок, разбить текст, превратить перечисление в список — конкретной правкой.',
+      '- definition — если видишь незаконченное определение («Слово — », «Слово:» или «Слово —» в конце строки), предложи короткое точное определение: find — этот фрагмент, replace — «Слово — определение».',
+      '- tip — совет без правки (find и replace — пустые строки).',
+      '- Максимум 6 предложений, самое важное — первым. Не переписывай весь текст и не меняй смысл. Если всё хорошо — {"suggestions":[]}.'
+    ].join('\n');
+  }
+
+  async function aiCall(cfg, userText) {
+    var base = String(cfg.base || '').replace(/\/+$/, '');
+    if (!base) throw new Error('не указан адрес API');
+    if (!cfg.key) throw new Error('не указан ключ API');
+    var url = base + '/chat/completions';
+    var payload = {
+      model: cfg.model || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: buildAiPrompt() },
+        { role: 'user', content: userText }
+      ],
+      temperature: 0.2,
+      max_tokens: 1200
+    };
+    var res = null;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      throw new Error('нет связи с сервисом (проверьте адрес и CORS; на превью AutoClaw внешние запросы блокируются)');
+    }
+    if (!res.ok) {
+      var errText = '';
+      try { errText = (await res.text()).slice(0, 160); } catch (e2) {}
+      throw new Error('сервис ответил ' + res.status + (errText ? ' — ' + errText : ''));
+    }
+    var data = null;
+    try { data = await res.json(); } catch (e3) { throw new Error('ответ сервиса не является JSON'); }
+    var content = '';
+    try { content = data.choices[0].message.content || ''; } catch (e4) {}
+    if (!content) throw new Error('пустой ответ сервиса');
+    return parseAiSuggestions(content, userText);
+  }
+
+  function parseAiSuggestions(content, sourceText) {
+    var s = String(content || '').trim();
+    var fence = /```(?:json)?\s*([\s\S]*?)```/.exec(s);
+    if (fence) s = fence[1].trim();
+    var data = null;
+    try {
+      data = JSON.parse(s);
+    } catch (e) {
+      var i = s.indexOf('{');
+      var j = s.lastIndexOf('}');
+      if (i !== -1 && j > i) {
+        try { data = JSON.parse(s.slice(i, j + 1)); } catch (e2) {}
+      }
+    }
+    if (!data || !Array.isArray(data.suggestions)) throw new Error('не удалось разобрать ответ ИИ');
+    var out = [];
+    data.suggestions.forEach(function (it) {
+      if (!it || typeof it !== 'object') return;
+      var type = String(it.type || 'tip');
+      var find = String(it.find || '');
+      var replace = String(it.replace || '');
+      if (type !== 'tip' && find && sourceText.indexOf(find) === -1) return;
+      out.push({ type: type, title: String(it.title || ''), explanation: String(it.explanation || ''), find: find, replace: replace });
+    });
+    return out.slice(0, 8);
+  }
+
+  async function aiAnalyze(manual) {
+    if (!aiCfg) loadAiCfg();
+    if (!aiCfg.enabled) { if (manual) openAiSettings(); return; }
+    if (!aiCfg.key) { if (manual) openAiSettings(); return; }
+    var note = currentId && getItem(currentId);
+    if (!note) { if (manual) toast('Сначала откройте заметку'); return; }
+    var text = (note.content || '').trim();
+    if (text.length < 20) { if (manual) toast('Слишком короткий текст для проверки'); return; }
+    if (aiBusy) { if (manual) toast('ИИ уже анализирует…'); return; }
+    if (!manual && (Date.now() - aiLastRun < 20000)) return;
+    if (!manual && aiLastHash[note.id] === text) return;
+    aiLastRun = Date.now();
+    aiBusy = true;
+    setAiStatus('', 'Анализирую…');
+    renderAiPanel();
+    try {
+      var result = await aiCall({ base: aiCfg.base, model: aiCfg.model, key: aiCfg.key }, text.slice(0, 8000));
+      aiLastHash[note.id] = text;
+      aiSuggestions[note.id] = result;
+      setAiStatus('ok', result.length ? ('Найдено подсказок: ' + result.length) : 'Замечаний нет — отлично!');
+    } catch (e) {
+      setAiStatus('error', e.message);
+      if (manual) toast('ИИ: ' + e.message, 'error');
+    } finally {
+      aiBusy = false;
+      renderAiPanel();
+    }
+  }
+
+  function aiApply(noteId, idx) {
+    var note = getItem(noteId);
+    var list = aiSuggestions[noteId] || [];
+    var s = list[idx];
+    if (!note || !s) return;
+    if (!s.find) { toast('Это совет — правки не требуются'); return; }
+    if ((note.content || '').indexOf(s.find) === -1) {
+      list.splice(idx, 1);
+      renderAiPanel();
+      toast('Фрагмент уже изменился — подсказка снята', 'error');
+      return;
+    }
+    note.content = note.content.replace(s.find, s.replace);
+    note.updated = Date.now();
+    markDirty(note.id);
+    persist();
+    if (note.id === currentId) {
+      $('#editor').value = note.content;
+      renderPreview();
+      renderOutline();
+      renderMeta();
+      renderBacklinks();
+      updateStatus();
+    }
+    list.splice(idx, 1);
+    setAiStatus('ok', 'Применено: ' + aiItemTitle(s));
+    renderAiPanel();
+  }
+
+  function aiDismiss(noteId, idx) {
+    var list = aiSuggestions[noteId] || [];
+    list.splice(idx, 1);
+    renderAiPanel();
+  }
+
+  async function aiTestConnection() {
+    var cfgForm = readAiForm();
+    if (!cfgForm.base) { setAiFormStatus('error', 'Укажите адрес API'); return; }
+    if (!cfgForm.key) { setAiFormStatus('error', 'Укажите ключ API'); return; }
+    setAiFormStatus('', 'Проверяю соединение…');
+    try {
+      var base = cfgForm.base.replace(/\/+$/, '');
+      var res = await fetch(base + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfgForm.key },
+        body: JSON.stringify({
+          model: cfgForm.model || 'gpt-4o-mini',
+          messages: [{ role: 'user', content: 'Ответь одним словом: ок' }],
+          max_tokens: 10
+        })
+      });
+      if (!res.ok) {
+        var t = '';
+        try { t = (await res.text()).slice(0, 120); } catch (e) {}
+        setAiFormStatus('error', 'Сервис ответил ' + res.status + (t ? ' — ' + t : ''));
+        return;
+      }
+      var data = await res.json();
+      var reply = '';
+      try { reply = data.choices[0].message.content || ''; } catch (e) {}
+      setAiFormStatus('ok', 'Соединение работает ' + (reply ? '(' + reply.slice(0, 40) + ')' : ''));
+    } catch (e) {
+      setAiFormStatus('error', 'Нет связи: возможен CORS или блокировка сети. Попробуйте OpenRouter, Ollama или версию на GitHub Pages.');
+    }
+  }
+
   /* ---------- операции над элементами ---------- */
 
   function allItems() { return Object.keys(vault.items).map(function (k) { return vault.items[k]; }); }
@@ -977,6 +1348,7 @@
     renderMeta();
     updateStatus();
     updateActiveRow();
+    renderAiPanel();
     try { localStorage.setItem(LS_SESSION, id); } catch (e) {}
   }
 
@@ -1189,6 +1561,7 @@
     persist();
     afterInputDebounced();
     updateStatus();
+    scheduleAiCheck();
   }
 
   var afterInputDebounced = debounce(function () {
@@ -1879,6 +2252,32 @@
       if (!document.hidden) lightDiskSync(false);
     });
 
+    // ИИ-помощник
+    $('#rb-ai').addEventListener('click', function () {
+      if (!aiCfg || !aiCfg.enabled) { openAiSettings(); return; }
+      setRightPanel(true);
+      renderAiPanel();
+    });
+    $('#ai-close').addEventListener('click', function () { closeModal('#ai-modal'); });
+    $('#ai-open-settings').addEventListener('click', function () { openAiSettings(); });
+    $('#ai-check').addEventListener('click', function () { aiAnalyze(true); });
+    $('#ai-auto').addEventListener('click', function () {
+      aiCfg.auto = !aiCfg.auto;
+      saveAiCfg();
+      renderAiPanel();
+      toast(aiCfg.auto ? 'Автопроверка включена' : 'Автопроверка выключена');
+    });
+    $('#ai-provider').addEventListener('change', function () { aiApplyPreset(this.value); });
+    $('#ai-save').addEventListener('click', function () {
+      aiCfg = readAiForm();
+      saveAiCfg();
+      setAiFormStatus('ok', 'Сохранено');
+      renderAiPanel();
+      if (aiCfg.enabled && aiCfg.auto) scheduleAiCheck();
+      toast('Настройки ИИ сохранены', 'ok');
+    });
+    $('#ai-test').addEventListener('click', aiTestConnection);
+
     // модальные окна: клик по фону
     $$('.modal').forEach(function (m) {
       m.addEventListener('click', function (e) { if (e.target === m) m.classList.remove('open'); });
@@ -1896,6 +2295,7 @@
       else if (act === 'open-cloud') openCloudWizard();
       else if (act === 'sync-check') lightDiskSync(true);
       else if (act === 'rescan') refreshDiskVault(true);
+      else if (act === 'ai') openAiSettings();
       else if (act === 'reset') resetVault();
     });
     document.addEventListener('click', function (e) {
@@ -1925,6 +2325,7 @@
       if (mod && key === 'n' && !e.shiftKey) { e.preventDefault(); createNote({}); return; }
       if (mod && (key === 'o' || key === 'p') && !e.shiftKey) { e.preventDefault(); openSwitcher(); return; }
       if (mod && e.shiftKey && key === 'f') { e.preventDefault(); activateTab('search'); $('#search-input').focus(); return; }
+      if (mod && e.shiftKey && key === 'a') { e.preventDefault(); aiAnalyze(true); return; }
       if (mod && key === 'e' && !e.shiftKey) { e.preventDefault(); cycleView(); return; }
       if (mod && (key === '\\' || key === '|')) { e.preventDefault(); setRightPanel(!rightOpen); return; }
       if (mod && !e.shiftKey && key === 'b' && document.activeElement === $('#editor')) { e.preventDefault(); applyCmd('bold'); return; }
@@ -1934,6 +2335,7 @@
         closeModal('#graph-modal');
         closeModal('#about-modal');
         closeModal('#cloud-modal');
+        closeModal('#ai-modal');
         closeMenu();
       }
     });
@@ -1949,9 +2351,11 @@
   function boot() {
     try { applyTheme(localStorage.getItem(LS_THEME) || 'dark'); } catch (e) { applyTheme('dark'); }
     if (!loadLocal()) seedVault();
+    loadAiCfg();
     bindUI();
     renderTree();
     renderTagsPanel();
+    renderAiPanel();
 
     var savedView = null;
     try { savedView = localStorage.getItem(LS_VIEW); } catch (e) {}
