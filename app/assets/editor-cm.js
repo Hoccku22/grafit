@@ -168,16 +168,26 @@
       return false;
     } };
     var lastAltTap = 0;
-    var altKey = { key: 'Alt', run: function () {
+    // Двойное нажатие Alt: слушаем честные DOM-события, потому что в keymap CodeMirror
+    // одиночный Alt как клавиша не матчится (модификатор меняет имя события).
+    function isAltPress(e) {
+      return e.key === 'Alt' || e.code === 'AltLeft' || e.code === 'AltRight' || e.keyCode === 18;
+    }
+    function onAltKeyDown(e) {
+      if (!isAltPress(e)) { lastAltTap = 0; return; }
+      if (e.repeat) return;
+      var active = document.activeElement;
+      var tag = (active && active.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA') { lastAltTap = 0; return; }
       var now = Date.now();
-      if (now - lastAltTap < 430) {
+      if (now - lastAltTap < 600) {
         lastAltTap = 0;
         if (opts.onGhostRequest) opts.onGhostRequest();
       } else {
         lastAltTap = now;
       }
-      return false;
-    } };
+    }
+    function onAltReset() { lastAltTap = 0; }
 
     var extensions = [
       CM.highlightSpecialChars(),
@@ -197,7 +207,7 @@
       ghostField,
       marksField,
       updateListener,
-      CM.Prec.highest(CM.keymap.of([enterKey, backspaceKey, tabKey, escKey, continueKey, altKey])),
+      CM.Prec.highest(CM.keymap.of([enterKey, backspaceKey, tabKey, escKey, continueKey])),
       CM.keymap.of([CM.indentWithTab]),
       CM.keymap.of(CM.historyKeymap),
       CM.keymap.of(CM.defaultKeymap),
@@ -210,6 +220,8 @@
       extensions: extensions
     });
     var view = new CM.EditorView({ state: state, parent: container });
+    window.addEventListener('keydown', onAltKeyDown, true);
+    window.addEventListener('blur', onAltReset);
 
     if (opts.onScroll) {
       view.scrollDOM.addEventListener('scroll', function () { opts.onScroll(); }, { passive: true });

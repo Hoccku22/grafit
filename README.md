@@ -27,8 +27,8 @@
 
 | Файл | Что это |
 |---|---|
-| [Графит-0.5.1-portable.exe](https://github.com/Hoccku22/grafit/releases/latest) | Портативная версия: один файл, без установки |
-| [Графит-0.5.1-setup.exe](https://github.com/Hoccku22/grafit/releases/latest) | Установщик: ярлыки в «Пуск» и на рабочем столе |
+| [Графит-0.5.2-portable.exe](https://github.com/Hoccku22/grafit/releases/latest) | Портативная версия: один файл, без установки |
+| [Графит-0.5.2-setup.exe](https://github.com/Hoccku22/grafit/releases/latest) | Установщик: ярлыки в «Пуск» и на рабочем столе |
 | [Веб-версия](https://hoccku22.github.io/grafit/app/) | Открыть в браузере — ничего скачивать не нужно |
 
 ## Скриншоты

@@ -489,6 +489,7 @@ if (!gotSingleLock) {
 app.whenReady().then(async function () {
   if (!gotSingleLock) return;
   try { app.setAppUserModelId('ru.grafit.desktop'); } catch (e) { /* ок */ }
+  try { Menu.setApplicationMenu(null); } catch (e) { /* ок: убираем нативное меню, чтобы Alt не перехватывался */ }
   loadConfig();
 
   // Локальный Ollama: добавляем CORS-заголовки, чтобы интерфейс мог к нему обращаться
