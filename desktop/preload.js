@@ -95,7 +95,7 @@ function makeDirHandle(p, name) {
   };
 }
 
-let APP_VERSION = '0.5.0';
+let APP_VERSION = '0.5.1';
 try {
   APP_VERSION = require(path.join(__dirname, 'package.json')).version || APP_VERSION;
 } catch (e) { /* ок */ }

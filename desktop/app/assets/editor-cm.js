@@ -123,6 +123,22 @@
     opts = opts || {};
     var silentSet = false;
 
+    // Жёсткие переопределения стилей (перекрывают дефолты CodeMirror при любом порядке стилей)
+    try {
+      if (!document.getElementById('cm-grafit-overrides')) {
+        var st = document.createElement('style');
+        st.id = 'cm-grafit-overrides';
+        st.textContent = [
+          '.cm-editor .cm-selectionBackground { background-color: rgba(139, 123, 247, 0.18) !important; }',
+          '.cm-editor.cm-focused .cm-selectionBackground { background-color: rgba(139, 123, 247, 0.22) !important; }',
+          '.cm-editor .cm-content ::selection { background-color: transparent !important; }',
+          '.cm-editor .cm-content::selection { background-color: transparent !important; }',
+          '.cm-editor .cm-ghost { color: rgba(163, 160, 180, 0.72) !important; }'
+        ].join('\n');
+        document.head.appendChild(st);
+      }
+    } catch (e) { /* ок */ }
+
     var updateListener = CM.EditorView.updateListener.of(function (u) {
       if (u.docChanged && !silentSet && opts.onChange) opts.onChange(u.state.doc.toString());
       if ((u.selectionSet || u.docChanged) && opts.onSelection) {
@@ -151,6 +167,17 @@
       if (opts.onGhostRequest) { opts.onGhostRequest(); return true; }
       return false;
     } };
+    var lastAltTap = 0;
+    var altKey = { key: 'Alt', run: function () {
+      var now = Date.now();
+      if (now - lastAltTap < 430) {
+        lastAltTap = 0;
+        if (opts.onGhostRequest) opts.onGhostRequest();
+      } else {
+        lastAltTap = now;
+      }
+      return false;
+    } };
 
     var extensions = [
       CM.highlightSpecialChars(),
@@ -170,7 +197,7 @@
       ghostField,
       marksField,
       updateListener,
-      CM.Prec.highest(CM.keymap.of([enterKey, backspaceKey, tabKey, escKey, continueKey])),
+      CM.Prec.highest(CM.keymap.of([enterKey, backspaceKey, tabKey, escKey, continueKey, altKey])),
       CM.keymap.of([CM.indentWithTab]),
       CM.keymap.of(CM.historyKeymap),
       CM.keymap.of(CM.defaultKeymap),

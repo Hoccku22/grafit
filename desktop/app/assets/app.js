@@ -1155,10 +1155,10 @@
     if (g.kind === 'fix' && g.idx != null) { aiApply(g.noteId, g.idx); return; }
     if (g.kind === 'continue' && g.text && ED) {
       var t = g.text;
-      var sel = ED.getSel();
-      var before = ED.getValue().slice(0, sel.from);
+      var pos = (typeof g.pos === 'number') ? Math.min(g.pos, ED.length()) : ED.getSel().from;
+      var before = ED.getValue().slice(0, pos);
       if (before && !/\s$/.test(before) && !/^\s/.test(t)) t = ' ' + t;
-      ED.insertAt(t, sel.from, sel.to);
+      ED.insertAt(t, pos, pos);
       toast('Продолжение добавлено', 'ok');
     }
   }
@@ -1202,6 +1202,8 @@
     if (aiContinueBusy || aiBusy) { if (manual) toast('ИИ уже думает…'); return; }
     var text = ED.getValue();
     if (!text.trim()) { if (manual) toast('Пустая заметка — продолжать нечего'); return; }
+    if (!manual && text.trim().length < 16) return;
+    if (!manual && ED.hasGhost()) return;
     var sel = ED.getSel();
     var tail = text.slice(0, sel.from).slice(-1400);
     aiContinueBusy = true;
@@ -1213,15 +1215,35 @@
       ], 220);
       var lines = reply.split('\n').filter(function (l) { return l.trim(); }).slice(0, 3).join('\n');
       if (!lines) { setAiStatus('', 'Пустой ответ'); return; }
-      ghostMode = { kind: 'continue', text: lines };
-      ED.showGhost(lines);
+      var anchor = sel.from;
+      ghostMode = { kind: 'continue', text: lines, pos: anchor };
+      ED.showGhost(lines, anchor);
       setAiStatus('', 'Серое продолжение в тексте — Tab, чтобы принять');
+      try { ED.focus(); } catch (e2) { /* ок */ }
     } catch (e) {
       setAiStatus('error', (e && e.message) || 'не получилось');
       if (manual) toast('ИИ: ' + ((e && e.message) || 'ошибка'), 'error');
     } finally {
       aiContinueBusy = false;
     }
+  }
+
+  var autoContinueTimer = null;
+  var lastAutoContinue = 0;
+  function scheduleAutoContinue() {
+    if (autoContinueTimer) { clearTimeout(autoContinueTimer); autoContinueTimer = null; }
+    if (!aiCfg || !aiCfg.enabled || !aiCfg.auto) return;
+    if (viewMode === 'read' || aiBusy || aiContinueBusy || !ED || !currentId) return;
+    autoContinueTimer = setTimeout(function () {
+      autoContinueTimer = null;
+      if (!aiCfg || !aiCfg.enabled || !aiCfg.auto) return;
+      if (viewMode === 'read' || aiBusy || aiContinueBusy || !ED || !currentId) return;
+      if (ED.hasGhost()) return;
+      var now = Date.now();
+      if (now - lastAutoContinue < 10000) return;
+      lastAutoContinue = now;
+      aiContinue(false);
+    }, 1900);
   }
 
   /* ----- подсветка подсказок прямо в тексте ----- */
@@ -2086,6 +2108,7 @@
     afterInputDebounced();
     updateStatus();
     scheduleAiCheck();
+    scheduleAutoContinue();
     hideAiPopup();
     renderEditorOverlay();
   }
@@ -2738,10 +2761,7 @@
       text: '',
       placeholder: 'Пишите здесь в Markdown…',
       onChange: function () { editorInput(); },
-      onSelection: function () {
-        if (ghostMode && ghostMode.kind === 'continue' && ED && ED.hasGhost()) { ED.hideGhost(); ghostMode = null; }
-        updateAiPopup();
-      },
+      onSelection: function () { updateAiPopup(); },
       onScroll: function () { updateAiPopup(); },
       onGhostAccept: function () { acceptGhost(); },
       onGhostRequest: function () { aiContinue(true); },
@@ -2874,6 +2894,8 @@
     $('#ai-open-settings').addEventListener('click', function () { openAiSettings(); });
     $('#ai-check').addEventListener('click', function () { aiAnalyze(true); });
     $('#ai-continue').addEventListener('click', function () { aiContinue(true); });
+    $('#ai-check').addEventListener('mousedown', function (e) { e.preventDefault(); });
+    $('#ai-continue').addEventListener('mousedown', function (e) { e.preventDefault(); });
     $('#ai-auto').addEventListener('click', function () {
       aiCfg.auto = !aiCfg.auto;
       saveAiCfg();
@@ -3022,7 +3044,7 @@
         insert: function (t) { if (ED) ED.insert(t); },
         sel: function () { return ED ? ED.getSel() : null; },
         setSel: function (a, b) { if (ED) ED.setSel(a, b); },
-        ghost: function (t) { if (ED) { ghostMode = { kind: 'continue', text: t }; ED.showGhost(t); } },
+        ghost: function (t) { if (ED) { var s = ED.getSel(); ghostMode = { kind: 'continue', text: t, pos: s.from }; ED.showGhost(t, s.from); } },
         hasGhost: function () { return ED ? ED.hasGhost() : false; },
         focus: function () { if (ED) ED.focus(); },
         cm: function () { return !!document.querySelector('.cm-editor'); },
