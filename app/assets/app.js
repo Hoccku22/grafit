@@ -112,6 +112,9 @@
   var aiDecoRanges = [];
   var aiPopupIdx = null;
   var aiLastRawContent = '';
+  var ED = null;
+  var ghostMode = null;
+  var aiContinueBusy = false;
 
   /* ---------- IndexedDB (для хранения дескриптора папки) ---------- */
 
@@ -466,13 +469,19 @@
   function startDiskWatch() {
     try {
       if (window.__grafitDesktop && window.__grafitDesktop.watchStart && disk && disk.root && disk.root.__path) {
-        window.__grafitDesktop.watchStart(disk.root.__path);
+        var pr = window.__grafitDesktop.watchStart(disk.root.__path);
+        if (pr && pr.catch) pr.catch(function () { /* нет обработчика — не критично */ });
       }
     } catch (e) { /* не критично */ }
   }
 
   function stopDiskWatch() {
-    try { if (window.__grafitDesktop && window.__grafitDesktop.watchStop) window.__grafitDesktop.watchStop(); } catch (e) { /* не критично */ }
+    try {
+      if (window.__grafitDesktop && window.__grafitDesktop.watchStop) {
+        var pr2 = window.__grafitDesktop.watchStop();
+        if (pr2 && pr2.catch) pr2.catch(function () { /* не критично */ });
+      }
+    } catch (e) { /* не критично */ }
   }
 
   var lastWatchSync = 0;
@@ -517,7 +526,7 @@
             n.updated = f.lastModified || Date.now();
             changed++;
             if (n.id === currentId) {
-              $('#editor').value = text;
+              if (ED) ED.setValue(text);
               renderPreview();
               renderOutline();
               renderMeta();
@@ -1115,7 +1124,7 @@
     markDirty(note.id);
     persist();
     if (note.id === currentId) {
-      $('#editor').value = note.content;
+      if (ED) ED.setValue(note.content);
       renderPreview();
       renderOutline();
       renderMeta();
@@ -1137,13 +1146,89 @@
     hideAiPopup();
   }
 
+  /* ----- призрачные подсказки (Tab — принять) ----- */
+
+  function acceptGhost() {
+    if (!ghostMode) return;
+    var g = ghostMode;
+    ghostMode = null;
+    if (g.kind === 'fix' && g.idx != null) { aiApply(g.noteId, g.idx); return; }
+    if (g.kind === 'continue' && g.text && ED) {
+      var t = g.text;
+      var sel = ED.getSel();
+      var before = ED.getValue().slice(0, sel.from);
+      if (before && !/\s$/.test(before) && !/^\s/.test(t)) t = ' ' + t;
+      ED.insertAt(t, sel.from, sel.to);
+      toast('Продолжение добавлено', 'ok');
+    }
+  }
+
+  async function aiChatRaw(messages, maxTokens) {
+    var base = String((aiCfg && aiCfg.base) || '').replace(/\/+$/, '');
+    if (!base) throw new Error('не указан адрес API');
+    var model = (aiCfg && aiCfg.model) || 'gpt-4o-mini';
+    var msgs = messages.slice();
+    if (/qwen3/i.test(model) && msgs.length) {
+      var li = msgs.length - 1;
+      msgs[li] = { role: msgs[li].role, content: msgs[li].content + '\n/no_think' };
+    }
+    var headers = { 'Content-Type': 'application/json' };
+    if (aiCfg && aiCfg.key) headers['Authorization'] = 'Bearer ' + aiCfg.key;
+    var res = null;
+    try {
+      res = await fetch(base + '/chat/completions', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ model: model, messages: msgs, temperature: 0.6, max_tokens: maxTokens || 220 })
+      });
+    } catch (e) { throw new Error('нет связи с сервисом (проверьте адрес и CORS)'); }
+    if (!res.ok) throw new Error('сервис ответил ' + res.status);
+    var data = null;
+    try { data = await res.json(); } catch (e2) { throw new Error('ответ сервиса не является JSON'); }
+    var content = '';
+    try { content = data.choices[0].message.content || ''; } catch (e3) {}
+    content = String(content).replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').replace(/\/no_think/g, '').trim();
+    if (!content) throw new Error('пустой ответ сервиса');
+    return content;
+  }
+
+  async function aiContinue(manual) {
+    if (!aiCfg) loadAiCfg();
+    if (!aiCfg.enabled) { if (manual) openAiSettings(); return; }
+    if (!aiCfg.key && !aiIsLocal()) { if (manual) openAiSettings(); return; }
+    var note = currentId && getItem(currentId);
+    if (!note || !ED) { if (manual) toast('Сначала откройте заметку'); return; }
+    if (viewMode === 'read') { if (manual) toast('Продолжение доступно в режиме редактирования (Ctrl+E)'); return; }
+    if (aiContinueBusy || aiBusy) { if (manual) toast('ИИ уже думает…'); return; }
+    var text = ED.getValue();
+    if (!text.trim()) { if (manual) toast('Пустая заметка — продолжать нечего'); return; }
+    var sel = ED.getSel();
+    var tail = text.slice(0, sel.from).slice(-1400);
+    aiContinueBusy = true;
+    setAiStatus('', 'Придумываю продолжение…');
+    try {
+      var reply = await aiChatRaw([
+        { role: 'system', content: 'Ты помогаешь дописывать заметки. Продолжи текст сразу после курсора: 1–2 коротких предложения в том же стиле. Верни только само продолжение, без кавычек, пояснений и markdown-обёрток. Пиши на языке текста.' },
+        { role: 'user', content: 'Заметка «' + note.name + '» (фрагмент до курсора):\n\n' + tail + '\n\n[КУРСОР ЗДЕСЬ] Продолжи с этой точки:' }
+      ], 220);
+      var lines = reply.split('\n').filter(function (l) { return l.trim(); }).slice(0, 3).join('\n');
+      if (!lines) { setAiStatus('', 'Пустой ответ'); return; }
+      ghostMode = { kind: 'continue', text: lines };
+      ED.showGhost(lines);
+      setAiStatus('', 'Серое продолжение в тексте — Tab, чтобы принять');
+    } catch (e) {
+      setAiStatus('error', (e && e.message) || 'не получилось');
+      if (manual) toast('ИИ: ' + ((e && e.message) || 'ошибка'), 'error');
+    } finally {
+      aiContinueBusy = false;
+    }
+  }
+
   /* ----- подсветка подсказок прямо в тексте ----- */
 
   function renderEditorOverlay() {
-    var ta = $('#editor');
-    var ov = $('#editor-overlay');
-    if (!ta || !ov) return;
-    var text = ta.value || '';
+    if (!ED) return;
+    var text = ED.getValue() || '';
     var note = currentId && getItem(currentId);
     var items = (aiCfg && aiCfg.enabled && note && aiSuggestions[note.id]) || [];
     aiDecoRanges = [];
@@ -1155,26 +1240,16 @@
       ranges.push({ start: idx, end: idx + s.find.length, k: k });
     });
     ranges.sort(function (a, b) { return a.start - b.start; });
-    var html = '';
+    var marks = [];
     var pos = 0;
     ranges.forEach(function (r) {
       if (r.start < pos) return;
       var sType = AI_TYPE_LABELS[items[r.k].type] ? items[r.k].type : 'tip';
-      html += escapeHtml(text.slice(pos, r.start));
-      html += '<span class="ai-deco ' + sType + '" data-sugg="' + r.k + '">' + escapeHtml(text.slice(r.start, r.end)) + '</span>';
+      marks.push({ from: r.start, to: r.end, cls: sType });
       aiDecoRanges.push(r);
       pos = r.end;
     });
-    html += escapeHtml(text.slice(pos));
-    ov.innerHTML = html + '\n';
-    ov.scrollTop = ta.scrollTop;
-    ov.scrollLeft = ta.scrollLeft;
-  }
-
-  function syncOverlayScroll() {
-    var ta = $('#editor');
-    var ov = $('#editor-overlay');
-    if (ta && ov) { ov.scrollTop = ta.scrollTop; ov.scrollLeft = ta.scrollLeft; }
+    ED.setMarks(marks);
   }
 
   function hideAiPopup() {
@@ -1249,18 +1324,18 @@
       pop.appendChild(acts);
     }
     pop.classList.remove('hidden');
-    var mark = $('#editor-overlay').querySelector('.ai-deco[data-sugg="' + r.k + '"]');
     var wrect = wrap.getBoundingClientRect();
     var pw = pop.offsetWidth;
     var ph = pop.offsetHeight;
     var left = 12;
     var top = 12;
-    if (mark) {
-      var mrect = mark.getBoundingClientRect();
-      left = Math.max(8, Math.min(mrect.left - wrect.left, wrect.width - pw - 8));
-      top = mrect.bottom - wrect.top + 6;
-      if (top + ph > wrect.height - 8 && (mrect.top - wrect.top - ph - 6) > 0) {
-        top = mrect.top - wrect.top - ph - 6;
+    var c1 = ED && ED.coordsAtPos(r.start);
+    var c2 = ED && ED.coordsAtPos(r.end);
+    if (c1 && c2) {
+      left = Math.max(8, Math.min(c1.left - wrect.left, wrect.width - pw - 8));
+      top = c2.bottom - wrect.top + 6;
+      if (top + ph > wrect.height - 8 && (c1.top - wrect.top - ph - 6) > 0) {
+        top = c1.top - wrect.top - ph - 6;
       }
     }
     pop.style.left = Math.round(left) + 'px';
@@ -1268,12 +1343,18 @@
   }
 
   function updateAiPopup() {
-    var ta = $('#editor');
     var pop = $('#ai-popup');
-    if (!ta || !pop) return;
+    if (!pop || !ED) return;
     if (!aiCfg || !aiCfg.enabled || viewMode === 'read') { hideAiPopup(); return; }
-    var r = findDecoAt(ta.selectionStart);
+    var sel = ED.getSel();
+    var r = findDecoAt(sel.from);
     if (!r) { hideAiPopup(); return; }
+    var note = currentId && getItem(currentId);
+    var s = note && (aiSuggestions[note.id] || [])[r.k];
+    if (s && s.find && s.replace) {
+      ghostMode = { kind: 'fix', noteId: note.id, idx: r.k };
+      ED.showGhost('  → ' + truncate(s.replace, 100));
+    }
     showAiPopupForRange(r);
   }
 
@@ -1541,7 +1622,7 @@
     });
     if (changedCurrent) {
       var cur = getItem(currentId);
-      if (cur) { $('#editor').value = cur.content; renderPreview(); }
+      if (cur) { if (ED) ED.setValue(cur.content); renderPreview(); }
     }
     persist();
   }
@@ -1769,7 +1850,8 @@
     showPlaceholder(false);
     $('#note-title').value = note.name;
     $('#note-path').textContent = notePath(id);
-    $('#editor').value = note.content || '';
+    if (ED) ED.setValue(note.content || '');
+    ghostMode = null;
     renderPreview();
     renderOutline();
     renderBacklinks();
@@ -1791,7 +1873,7 @@
       showPlaceholder(true);
       $('#note-title').value = '';
       $('#note-path').textContent = '';
-      $('#editor').value = '';
+      if (ED) ED.setValue('');
       $('#preview').innerHTML = '';
       renderOutline();
       renderBacklinks();
@@ -1984,10 +2066,11 @@
   /* ---------- редактирование ---------- */
 
   function editorInput() {
+    if (!ED) return;
     var note = currentId && getItem(currentId);
     if (!note) {
       // защита: если текущая запись потерялась (например, удалена), не теряем ввод
-      var text = $('#editor').value || '';
+      var text = ED.getValue() || '';
       if (!text.trim()) return;
       var t2 = $('#note-title') && $('#note-title').value ? $('#note-title').value.trim() : '';
       note = createNote({ name: t2 || 'Восстановленная заметка', content: text, silent: true, open: false });
@@ -1996,7 +2079,7 @@
       if (!note) return;
       toast('Ввод сохранён в заметку «' + note.name + '»', 'error');
     }
-    note.content = $('#editor').value;
+    note.content = ED.getValue();
     note.updated = Date.now();
     markDirty(note.id);
     persist();
@@ -2017,43 +2100,16 @@
   }, 180);
 
   function insertTextAt(text, start, end) {
-    var ta = $('#editor');
-    ta.focus();
-    ta.setSelectionRange(start, end);
-    var ok = false;
-    try { ok = document.execCommand('insertText', false, text); } catch (e) { ok = false; }
-    if (!ok) ta.setRangeText(text, start, end, 'end');
-    editorInput();
+    if (!ED) return;
+    ED.insertAt(text, start, end);
   }
 
   function wrapSelection(pre, post, ph) {
-    var ta = $('#editor');
-    var start = ta.selectionStart;
-    var end = ta.selectionEnd;
-    var sel = ta.value.slice(start, end);
-    var inner = sel || ph;
-    insertTextAt(pre + inner + post, start, end);
-    var from = start + pre.length;
-    ta.setSelectionRange(from, from + inner.length);
+    if (ED) ED.wrapSel(pre, post, ph);
   }
 
   function linePrefixToggle(prefix) {
-    var ta = $('#editor');
-    var start = ta.selectionStart;
-    var end = ta.selectionEnd;
-    var val = ta.value;
-    var lineStart = val.lastIndexOf('\n', start - 1) + 1;
-    var lineEnd = val.indexOf('\n', end);
-    if (lineEnd === -1) lineEnd = val.length;
-    var lines = val.slice(lineStart, lineEnd).split('\n');
-    var allPrefixed = lines.every(function (l) { return !l.trim() || l.indexOf(prefix) === 0; });
-    var out = lines.map(function (l) {
-      if (!l.trim()) return l;
-      if (allPrefixed) return l.indexOf(prefix) === 0 ? l.slice(prefix.length) : l;
-      return prefix + l;
-    }).join('\n');
-    insertTextAt(out, lineStart, lineEnd);
-    ta.focus();
+    if (ED) ED.linePrefix(prefix);
   }
 
   function applyCmd(cmd) {
@@ -2070,12 +2126,16 @@
       case 'ul': linePrefixToggle('- '); break;
       case 'ol': linePrefixToggle('1. '); break;
       case 'task': linePrefixToggle('- [ ] '); break;
-      case 'table':
-        insertTextAt('\n| Столбец | Столбец |\n|---|---|\n|  |  |\n', $('#editor').selectionStart, $('#editor').selectionEnd);
+      case 'table': {
+        var selT = ED ? ED.getSel() : { from: 0, to: 0 };
+        insertTextAt('\n| Столбец | Столбец |\n|---|---|\n|  |  |\n', selT.from, selT.to);
         break;
-      case 'hr':
-        insertTextAt('\n---\n', $('#editor').selectionStart, $('#editor').selectionEnd);
+      }
+      case 'hr': {
+        var selH = ED ? ED.getSel() : { from: 0, to: 0 };
+        insertTextAt('\n---\n', selH.from, selH.to);
         break;
+      }
     }
   }
 
@@ -2673,23 +2733,20 @@
     $('#btn-delete-note').addEventListener('click', function () { if (currentId) deleteItem(currentId); });
     $('#placeholder-new').addEventListener('click', function () { createNote({}); });
 
-    // редактор
-    $('#editor').addEventListener('input', editorInput);
-    $('#editor').addEventListener('keydown', function (e) {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        var start = this.selectionStart;
-        var end = this.selectionEnd;
-        insertTextAt('  ', start, end);
-      }
-    });
-    $('#editor').addEventListener('scroll', function () { syncOverlayScroll(); updateAiPopup(); });
-    $('#editor').addEventListener('keyup', function () { updateAiPopup(); });
-    $('#editor').addEventListener('click', function () { updateAiPopup(); });
-    document.addEventListener('selectionchange', function () {
-      var ta = $('#editor');
-      if (document.activeElement === ta) updateAiPopup();
-    });
+    // редактор (CodeMirror)
+    ED = window.GrafitEditor ? window.GrafitEditor.create($('#editor'), {
+      text: '',
+      placeholder: 'Пишите здесь в Markdown…',
+      onChange: function () { editorInput(); },
+      onSelection: function () {
+        if (ghostMode && ghostMode.kind === 'continue' && ED && ED.hasGhost()) { ED.hideGhost(); ghostMode = null; }
+        updateAiPopup();
+      },
+      onScroll: function () { updateAiPopup(); },
+      onGhostAccept: function () { acceptGhost(); },
+      onGhostRequest: function () { aiContinue(true); },
+      onGhostDismiss: function () { ghostMode = null; }
+    }) : null;
     document.addEventListener('mousedown', function (e) {
       if (!e.target || !e.target.closest) return;
       if (e.target.closest('#ai-popup') || e.target.closest('#editor-wrap')) return;
@@ -2724,7 +2781,7 @@
       });
       note.updated = Date.now();
       markDirty(note.id);
-      $('#editor').value = note.content;
+      if (ED) ED.setValue(note.content);
       editorInput();
       renderPreview();
     });
@@ -2816,6 +2873,7 @@
     $('#ai-close').addEventListener('click', function () { closeModal('#ai-modal'); });
     $('#ai-open-settings').addEventListener('click', function () { openAiSettings(); });
     $('#ai-check').addEventListener('click', function () { aiAnalyze(true); });
+    $('#ai-continue').addEventListener('click', function () { aiContinue(true); });
     $('#ai-auto').addEventListener('click', function () {
       aiCfg.auto = !aiCfg.auto;
       saveAiCfg();
@@ -2900,8 +2958,8 @@
       if (mod && e.shiftKey && is('a')) { e.preventDefault(); aiAnalyze(true); return; }
       if (mod && is('e') && !e.shiftKey) { e.preventDefault(); cycleView(); return; }
       if (mod && (key === '\\' || key === '|' || code === 'Backslash')) { e.preventDefault(); setRightPanel(!rightOpen); return; }
-      if (mod && !e.shiftKey && is('b') && document.activeElement === $('#editor')) { e.preventDefault(); applyCmd('bold'); return; }
-      if (mod && !e.shiftKey && is('i') && document.activeElement === $('#editor')) { e.preventDefault(); applyCmd('italic'); return; }
+      if (mod && !e.shiftKey && is('b') && ED && ED.hasFocus()) { e.preventDefault(); applyCmd('bold'); return; }
+      if (mod && !e.shiftKey && is('i') && ED && ED.hasFocus()) { e.preventDefault(); applyCmd('italic'); return; }
       if (e.key === 'Escape') {
         closeModal('#switcher-modal');
         closeModal('#graph-modal');
@@ -2957,6 +3015,26 @@
     tryRestoreDisk();
     window.__appReady = true;
     try { window.__grafitUi = { confirm: function (o) { return gdConfirm(o); }, alert: function (o) { return gdAlert(o); }, dialogOpen: function () { return !!document.querySelector('.gd-layer'); } }; } catch (e) {}
+    try {
+      window.__grafitEditor = {
+        get: function () { return ED ? ED.getValue() : null; },
+        set: function (t) { if (ED) ED.setValue(t); },
+        insert: function (t) { if (ED) ED.insert(t); },
+        sel: function () { return ED ? ED.getSel() : null; },
+        setSel: function (a, b) { if (ED) ED.setSel(a, b); },
+        ghost: function (t) { if (ED) { ghostMode = { kind: 'continue', text: t }; ED.showGhost(t); } },
+        hasGhost: function () { return ED ? ED.hasGhost() : false; },
+        focus: function () { if (ED) ED.focus(); },
+        cm: function () { return !!document.querySelector('.cm-editor'); },
+        setSuggestions: function (list) {
+          var n = currentId && getItem(currentId);
+          if (!n) return false;
+          aiSuggestions[n.id] = list || [];
+          renderEditorOverlay();
+          return true;
+        }
+      };
+    } catch (e) {}
     try {
       // Быстрая заметка из мини-окна (десктоп): создаёт заметку в текущем хранилище
       window.__grafitQuickNote = function (text) {

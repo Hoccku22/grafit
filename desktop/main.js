@@ -201,7 +201,7 @@ function createWindow() {
       setTimeout(async function () {
         try {
           const r = await win.webContents.executeJavaScript(
-            '(function(){ return { title: document.title, desktop: !!window.__grafitDesktop, version: (window.__grafitDesktop ? window.__grafitDesktop.version : ""), picker: typeof window.showDirectoryPicker, notes: (window.__appInfo ? window.__appInfo().notes : -1), overlay: !!document.getElementById("editor-overlay"), md: (typeof window.MD === "object" && window.MD.render("# т").indexOf("<h1") !== -1), shell: !!document.getElementById("gd-titlebar"), shellMode: (window.__grafitDesktop ? window.__grafitDesktop.shell : null) }; })()'
+            '(function(){ return { title: document.title, desktop: !!window.__grafitDesktop, version: (window.__grafitDesktop ? window.__grafitDesktop.version : ""), picker: typeof window.showDirectoryPicker, notes: (window.__appInfo ? window.__appInfo().notes : -1), cm: !!document.querySelector(".cm-editor"), md: (typeof window.MD === "object" && window.MD.render("# т").indexOf("<h1") !== -1), shell: !!document.getElementById("gd-titlebar"), shellMode: (window.__grafitDesktop ? window.__grafitDesktop.shell : null) }; })()'
           );
           console.log('SMOKE_RESULT ' + JSON.stringify(r));
           if (SHOT_PATH) {
@@ -217,7 +217,7 @@ function createWindow() {
             console.log('SMOKE_INFO ' + JSON.stringify(info));
             if (OUT_PATH) { fs.writeFileSync(OUT_PATH, JSON.stringify(info, null, 2)); console.log('SMOKE_OUT ' + OUT_PATH); }
           } catch (e3) { console.log('SMOKE_INFO_ERR ' + (e3 && e3.message)); }
-          const ok = !!r.title && r.title.indexOf('Графит') !== -1 && r.desktop && r.picker === 'function' && r.notes >= 1 && r.overlay && r.md && r.shell && r.shellMode === 'overlay';
+          const ok = !!r.title && r.title.indexOf('Графит') !== -1 && r.desktop && r.picker === 'function' && r.notes >= 1 && r.cm && r.md && r.shell && r.shellMode === 'overlay';
           console.log(ok ? 'SMOKE_OK' : 'SMOKE_FAIL');
           app.exit(ok ? 0 : 1);
         } catch (e) {
@@ -290,7 +290,7 @@ function createWindow() {
             await new Promise(function (r) { setTimeout(r, 2800); });
             await win.webContents.executeJavaScript('(function(){ var rows=document.querySelectorAll("#file-tree .tree-row"); for (var i=0;i<rows.length;i++){ var lab=rows[i].querySelector(".item-label"); if(lab && lab.textContent==="Альфа"){ rows[i].click(); return true; } } return false; })()');
             await new Promise(function (r) { setTimeout(r, 400); });
-            res.steps.alphaText = await win.webContents.executeJavaScript('document.getElementById("editor").value.indexOf("обновлено снаружи") !== -1');
+            res.steps.alphaText = await win.webContents.executeJavaScript('((window.__grafitEditor && window.__grafitEditor.get()) || "").indexOf("обновлено снаружи") !== -1');
             if (SYNC_SHOT_PATH) {
               try {
                 const img = await win.webContents.capturePage();

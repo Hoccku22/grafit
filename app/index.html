@@ -145,8 +145,7 @@
     <div id="panes" class="mode-split">
       <div id="editor-pane">
         <div class="editor-wrap" id="editor-wrap">
-          <div id="editor-overlay" aria-hidden="true"></div>
-          <textarea id="editor" placeholder="Пишите здесь в Markdown…" spellcheck="false" aria-label="Редактор заметки"></textarea>
+          <div id="editor" aria-label="Редактор заметки"></div>
           <div id="ai-popup" class="hidden"></div>
         </div>
       </div>
@@ -174,12 +173,13 @@
       <div class="rb-title">ИИ-помощник <span class="badge hidden" id="ai-count">0</span></div>
       <div class="ai-controls">
         <button class="ai-btn" id="ai-check">Проверить</button>
+        <button class="ai-btn" id="ai-continue" title="Продолжение текста появится серым в строке; Tab — принять (Ctrl+Space)">Продолжить</button>
         <button class="ai-btn on" id="ai-auto" title="Автопроверка при наборе">Авто: вкл</button>
         <button class="ai-btn" id="ai-open-settings" title="Настройки ИИ">Настройки</button>
       </div>
       <div id="ai-status-line" class="ai-status-line"></div>
       <div id="ai-suggestions"></div>
-      <div class="ai-disclaimer">Текст заметок отправляется в выбранный вами сервис ИИ при проверке.</div>
+      <div class="ai-disclaimer">Текст заметок отправляется в выбранный вами сервис ИИ при проверке и продолжении. Серые подсказки в тексте принимаются клавишей Tab.</div>
     </div>
     <div class="rb-block">
       <div class="rb-title">Оглавление</div>
@@ -276,7 +276,7 @@
       <p>Поддерживается Markdown, вики-ссылки <b>[[Название]]</b>, теги <b>#тег</b>, чек-листы, таблицы и блоки кода.</p>
       <h3>ИИ-помощник</h3>
       <p>Необязательный помощник: подключите любой OpenAI-совместимый сервис (кнопка-искра в левой ленте) — он будет следить за текстом, подсказывать оформление, структуру и формулировки, исправлять опечатки и предлагать определения. Подсказки подсвечиваются прямо в тексте: поставьте курсор на подчёркнутый фрагмент — появится карточка с серым вариантом и кнопкой «Применить». Есть поддержка локальных моделей (Ollama). Работает на GitHub Pages и локально; на превью AutoClaw внешние запросы ограничены.</p>
-      <p class="about-version">Версия 1.13 · мини-Markdown собственной сборки · код открыт, лицензия MIT</p>
+      <p class="about-version">Версия 1.14 · редактор CodeMirror · код открыт, лицензия MIT</p>
     </div>
   </div>
 </div>
@@ -386,6 +386,8 @@
 
 <script src="assets/markdown.js"></script>
 <script src="assets/seeds.js"></script>
+<script src="assets/codemirror.bundle.js"></script>
+<script src="assets/editor-cm.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
