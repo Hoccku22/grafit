@@ -1336,7 +1336,7 @@
     function showPartial(reply) {
       if (!isCurrent()) return;
       var continuation = window.GrafitAI.continuation(before, after, reply);
-      if (continuation) ED.showGhost(continuation, sel.from);
+      if (continuation) ED.showGhost(continuation, sel.from); else ED.hideGhost();
     }
     ghostMode = null;
     ED.hideGhost();
@@ -1349,7 +1349,7 @@
       ], 240, showPartial, needsDefinition);
       if (!isCurrent()) { ED.hideGhost(); return; }
       var lines = window.GrafitAI.continuation(before, after, reply);
-      if (!lines) { setAiStatus('', 'Пустой ответ'); return; }
+      if (!lines) { ED.hideGhost(); setAiStatus('', 'Нет нового продолжения'); return; }
       var anchor = sel.from;
       ghostMode = { kind: 'continue', text: lines, pos: anchor, noteId: noteId, source: text };
       ED.showGhost(lines, anchor);

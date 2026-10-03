@@ -10,6 +10,16 @@
     var normalizedLine = line.replace(/[-—–]/g, '-').replace(/\s+/g, ' ').toLowerCase();
     var normalizedReply = text.replace(/[-—–]/g, '-').replace(/\s+/g, ' ').toLowerCase();
     if (normalizedReply && normalizedLine.startsWith(normalizedReply)) return '';
+    // Suppress a paraphrase of the sentence just completed, including streamed prefixes.
+    var lastSentence = before.trim().match(/[^.!?\n]+[.!?]\s*$/);
+    if (lastSentence) {
+      var words = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+      var previous = lastSentence[0].toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+      if (words.length >= 2) {
+        var probe = words.slice(0, Math.min(words.length, 4)).join(' ');
+        if (previous.join(' ').includes(probe) && (words.length < 4 || probe.length >= 16)) return '';
+      }
+    }
     // Some models return the completed sentence rather than its missing suffix.
     var joinWord = false;
     var pattern = line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[-—–]/g, '[-—–]').replace(/\s+/g, '\\s+');

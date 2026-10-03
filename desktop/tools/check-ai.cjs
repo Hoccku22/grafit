@@ -3,6 +3,9 @@ const ai = require('../app/assets/ai-core.js');
 const recommended = require('../app/assets/ai-recommended.js');
 const md = require('../app/assets/markdown.js');
 async function main() {
+  assert.equal(ai.continuation('Компьютер - это электронное устройство для обработки данных.', '', 'электронное устройство для обработки информации.'), '');
+  assert.equal(ai.continuation('Компьютер - это электронное устройство для обработки данных.', '', 'электронное устройство'), '');
+  assert.equal(ai.continuation('Компьютер - это электронное устройство для обработки данных.', '', 'Он также позволяет хранить файлы.'), ' Он также позволяет хранить файлы.');
   assert.equal(ai.continuation('Компьютер - это', '', 'Компьютер - это сложное устройство.'), ' сложное устройство.');
   assert.equal(ai.continuation('Компьютер - это', '', 'Компьютер — это электронное устройство.'), ' электронное устройство.');
   assert.equal(ai.continuation('Компью', '', 'Компьютер — устройство.'), 'тер — устройство.');
