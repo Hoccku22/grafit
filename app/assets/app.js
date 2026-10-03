@@ -113,6 +113,7 @@
   var aiPopupIdx = null;
   var aiLastRawContent = '';
   var ED = null;
+  var autoBlockedSource = null;
   var ghostMode = null;
   var aiContinueBusy = false;
 
@@ -1147,6 +1148,8 @@
       var pos = (typeof g.pos === 'number') ? Math.min(g.pos, ED.length()) : ED.getSel().from;
       var before = ED.getValue().slice(0, pos);
       if (g.source == null && before && !/\s$/.test(before) && !/^\s/.test(t)) t = ' ' + t;
+      autoBlockedSource = { noteId: currentId, text: ED.getValue().slice(0, pos) + t + ED.getValue().slice(pos) };
+      if (autoContinueTimer) { clearTimeout(autoContinueTimer); autoContinueTimer = null; }
       ED.insertAt(t, pos, pos);
       toast('Продолжение добавлено', 'ok');
     }
@@ -1276,12 +1279,14 @@
   function scheduleAutoContinue() {
     if (autoContinueTimer) { clearTimeout(autoContinueTimer); autoContinueTimer = null; }
     if (!aiCfg || !aiCfg.enabled || !aiCfg.auto) return;
+    if (autoBlockedSource && currentId === autoBlockedSource.noteId && ED && ED.getValue() === autoBlockedSource.text) return;
     if (viewMode === 'read' || aiBusy || aiContinueBusy || aiTransformBusy || !ED || !currentId) return;
     autoContinueTimer = setTimeout(function () {
       autoContinueTimer = null;
       if (!aiCfg || !aiCfg.enabled || !aiCfg.auto) return;
       if (viewMode === 'read' || aiBusy || aiContinueBusy || aiTransformBusy || !ED || !currentId) return;
       if (ED.hasGhost()) return;
+      if (autoBlockedSource && currentId === autoBlockedSource.noteId && ED.getValue() === autoBlockedSource.text) return;
       var now = Date.now();
       if (now - lastAutoContinue < 5000) return;
       lastAutoContinue = now;

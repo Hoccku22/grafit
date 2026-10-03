@@ -85,9 +85,12 @@
   }
   function completionContext(name, before, after) {
     var line = before.slice(before.lastIndexOf('\n') + 1).trim();
-    var headings = (before.match(/^#{1,6}\s+.+$/gm) || []).slice(-3);
+    // A new nonempty line is the user's current task; older topics must not steer it.
+    var scopeStart = line ? before.lastIndexOf('\n') + 1 : (before.lastIndexOf('\n\n') < 0 ? 0 : before.lastIndexOf('\n\n') + 2);
+    var localBefore = before.slice(scopeStart);
+    var headings = line ? [] : (localBefore.match(/^#{1,6}\s+.+$/gm) || []).slice(-1);
     var formula = /^(?:#{1,6}\s*)?(?:формула|теорема)\s+\S/i.test(line) ? line.replace(/^#{1,6}\s*/, '').replace(/[:.]\s*$/, '') : null;
-    return { title: name, headings: headings, currentLine: line, before: before.slice(-3200), after: after.slice(0, 1600), formula: formula, code: /(?:пример|образец)\s+кода|напиши\s+код/i.test(line) };
+    return { title: name, headings: headings, currentLine: line, before: localBefore.slice(-3200), after: after.split(/\n\s*\n/)[0].slice(0, 1600), formula: formula, code: /(?:пример|образец)\s+кода|напиши\s+код/i.test(line) };
   }
   function completionMessages(context) {
     var task = context.formula
