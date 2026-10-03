@@ -121,9 +121,15 @@ window.__grafitDesktop = {
   rename: function (from, to) { return ipcRenderer.invoke('fs:rename', from, to); },
   engineStatus: function () { return ipcRenderer.invoke('engine:status'); },
   engineRestart: function () { return ipcRenderer.invoke('engine:restart'); },
+  recommendedStatus: function () { return ipcRenderer.invoke('ai:recommended-status'); },
+  recommendedSetup: function () { return ipcRenderer.invoke('ai:recommended-setup'); },
   watchStart: function (p) { return ipcRenderer.invoke('watch:start', p); },
   watchStop: function () { return ipcRenderer.invoke('watch:stop'); }
 };
+
+ipcRenderer.on('ai:recommended-progress', function (ev, state) {
+  window.dispatchEvent(new CustomEvent('grafit-ai-setup-progress', { detail: state }));
+});
 
 // Мгновенный отклик папки: главный процесс сообщает об изменениях файлов
 try {

@@ -712,6 +712,7 @@
   /* ---------- ИИ-помощник ---------- */
 
   var AI_PRESETS = {
+    recommended: window.GrafitRecommended.config,
     openrouter: { base: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
     openai: { base: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
     groq: { base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
@@ -722,7 +723,7 @@
   var AI_TYPE_LABELS = { typo: 'Орфография', format: 'Форматирование', structure: 'Структура', definition: 'Определение', style: 'Формулировка', tip: 'Совет' };
 
   function defaultAiCfg() {
-    return { enabled: false, auto: true, provider: 'openrouter', base: AI_PRESETS.openrouter.base, model: AI_PRESETS.openrouter.model, key: '' };
+    return { enabled: false, auto: true, provider: 'recommended', base: AI_PRESETS.recommended.base, model: AI_PRESETS.recommended.model, qualityModel: AI_PRESETS.recommended.qualityModel, key: '' };
   }
 
   function loadAiCfg() {
@@ -742,6 +743,7 @@
         }
       }
     } catch (e) { /* нет сохранённых настроек */ }
+    if (aiCfg.provider === 'recommended') aiCfg = window.GrafitRecommended.apply(aiCfg);
     return aiCfg;
   }
 
@@ -775,10 +777,13 @@
     $('#ai-modal').classList.add('open');
     aiOllamaToggle();
     if ($('#ai-provider').value === 'ollama') aiOllamaRefresh(true);
+    if ($('#ai-provider').value === 'recommended' && window.__grafitDesktop && window.__grafitDesktop.recommendedStatus) {
+      window.__grafitDesktop.recommendedStatus().then(setRecommendedProgress).catch(function () {});
+    }
   }
 
   function readAiForm() {
-    return {
+    var cfg = {
       enabled: $('#ai-enabled').checked,
       auto: aiCfg ? !!aiCfg.auto : true,
       provider: $('#ai-provider').value || 'custom',
@@ -787,10 +792,11 @@
       qualityModel: $('#ai-quality-model').value.trim(),
       key: $('#ai-key').value.trim()
     };
+    return cfg.provider === 'recommended' ? window.GrafitRecommended.apply(cfg) : cfg;
   }
 
   function aiIsLocal() {
-    return !!(aiCfg && (aiCfg.provider === 'ollama' || /localhost|127\.0\.0\.1/i.test(aiCfg.base || '')));
+    return !!(aiCfg && (aiCfg.provider === 'recommended' || aiCfg.provider === 'ollama' || /localhost|127\.0\.0\.1/i.test(aiCfg.base || '')));
   }
 
   function aiApplyPreset(id) {
@@ -798,6 +804,8 @@
     if (!p) return;
     if (p.base) $('#ai-base').value = p.base;
     if (p.model) $('#ai-model').value = p.model;
+    $('#ai-quality-model').value = p.qualityModel || '';
+    if (id === 'recommended' || id === 'ollama') $('#ai-key').value = '';
   }
 
   function aiItemTitle(s) {
@@ -1055,7 +1063,7 @@
     while (attemptsLeft > 0 && !result) {
       attemptsLeft--;
       try {
-        result = await aiCall({ base: aiCfg.base, model: aiCfg.model, key: aiCfg.key }, text.slice(0, 8000), attemptsLeft === 0);
+        result = await aiCall({ provider: aiCfg.provider, base: aiCfg.base, model: aiCfg.model, key: aiCfg.key }, text.slice(0, 8000), attemptsLeft === 0);
       } catch (e) {
         lastErr = e;
         if (!e || !e.aiParse) break;
@@ -1171,7 +1179,8 @@
       if (from === to) { from = 0; to = original.length; source = original; }
       if (!source.trim()) { toast('Сначала напишите конспект'); return; }
       if (source.length > 24000) { toast('Выделите фрагмент до 24 000 символов'); return; }
-      instruction = 'Структурируй конспект в Markdown: осмысленные заголовки ## и ###, абзацы, списки, выделение терминов. Сохрани все факты, числа, формулы и смысл. Не добавляй сведения, которых нет в исходнике. Сохрани frontmatter, код и ссылки. Верни только полный преобразованный фрагмент без вступления и внешних блоков кода.';
+      if (aiCfg.provider === 'recommended' && source.length > 7000) { toast('Выделите фрагмент до 7 000 символов для локальной модели'); return; }
+      instruction = 'Структурируй конспект в Markdown. Сохрани ВСЕ исходные предложения и слова дословно, каждое число ровно столько раз, сколько оно встречается в исходнике. Разрешены только заголовки ## и ###, разделение на абзацы, маркеры списков, выделение терминов. Не сокращай и не перефразируй предложения. Не добавляй даты, frontmatter, автора, примеры, выводы или новые факты. Если frontmatter, код, ссылки и формулы уже есть, сохрани их. Верни только полный оформленный исходный текст без вступления и внешнего блока кода.';
     } else {
       source = $('#ai-formula-name').value.trim() || source.trim();
       if (!source) { $('#ai-formula-name').focus(); toast('Введите название формулы или выделите его в заметке'); return; }
@@ -1183,9 +1192,14 @@
     box.classList.remove('hidden'); output.textContent = '';
     $('#ai-edit-apply').disabled = true;
     try {
-      var result = window.GrafitAI.clean(await aiChatRaw([
+      var messages = kind === 'structure' ? window.GrafitAI.structureMessages(source) : [
         { role: 'system', content: instruction }, { role: 'user', content: source }
-      ], kind === 'structure' ? 6000 : 900, function (text) { output.textContent = window.GrafitAI.clean(text); }, true));
+      ];
+      var knownFormula = kind === 'formula' ? window.GrafitAI.knownFormula(source) : null;
+      var response = knownFormula || await aiChatRaw(messages, kind === 'structure' ? 1200 : 900, function (text) {
+        if (kind !== 'structure') output.textContent = window.GrafitAI.clean(text);
+      }, true);
+      var result = kind === 'structure' ? window.GrafitAI.buildStructured(source, response) : window.GrafitAI.clean(response);
       if (from > 0 && original[from - 1] !== '\n') result = '\n\n' + result;
       if (to < original.length && original[to] !== '\n') result += '\n\n';
       output.textContent = result;
@@ -1197,7 +1211,7 @@
         box.classList.add('hidden');
         setAiStatus('ok', 'Правка применена. Ctrl+Z — отменить');
       };
-      setAiStatus('ok', 'Проверьте результат и нажмите «Применить»');
+      setAiStatus('ok', knownFormula ? 'Формула из встроенного справочника — нажмите «Применить»' : 'Проверьте результат и нажмите «Применить»');
     } catch (e) {
       box.classList.add('hidden');
       if (e.name !== 'AbortError') setAiStatus('error', e.message);
@@ -1221,6 +1235,7 @@
     var before = text.slice(0, sel.from), after = text.slice(sel.to);
     if (!before.trim()) return;
     var tail = before.slice(-2400);
+    var needsDefinition = /(?:[-—–]\s*(?:это)?|:)\s*$/i.test(tail);
     var noteId = note.id;
     function isCurrent() { return currentId === noteId && ED.getValue() === text && ED.getSel().from === sel.from && ED.getSel().to === sel.to; }
     function showPartial(reply) {
@@ -1228,13 +1243,15 @@
       var continuation = window.GrafitAI.continuation(before, after, reply);
       if (continuation) ED.showGhost(continuation, sel.from);
     }
+    ghostMode = null;
+    ED.hideGhost();
     aiContinueBusy = true;
     setAiStatus('', 'Придумываю продолжение…');
     try {
       var reply = await aiChatRaw([
         { role: 'system', content: 'Ты дополняешь текст в позиции курсора. Верни ТОЛЬКО недостающий хвост: не повторяй ни слова из текста до курсора. Учитывай текст после курсора и не повторяй его. Заверши незаконченное слово или определение точно и кратко. Пример: до курсора «Компьютер - это», ответ «электронное устройство для обработки данных.» Не добавляй вступлений и кавычек. 1–2 предложения на языке заметки. Не выдумывай факты.' },
         { role: 'user', content: 'Заметка «' + note.name + '» (фрагмент до курсора):\n\n' + tail + '[КУРСОР]' + after.slice(0, 800) }
-      ], 240, showPartial);
+      ], 240, showPartial, needsDefinition);
       if (!isCurrent()) { ED.hideGhost(); return; }
       var lines = window.GrafitAI.continuation(before, after, reply);
       if (!lines) { setAiStatus('', 'Пустой ответ'); return; }
@@ -1451,9 +1468,59 @@
     if (!section) return;
     var provider = ($('#ai-provider') && $('#ai-provider').value) || '';
     var base = ($('#ai-base') && $('#ai-base').value) || '';
-    var show = provider === 'ollama' || /localhost|127\.0\.0\.1/i.test(base);
+    var recommended = provider === 'recommended';
+    var show = !recommended && (provider === 'ollama' || /localhost|127\.0\.0\.1/i.test(base));
     section.classList.toggle('hidden', !show);
+    $('#ai-recommended-section').classList.toggle('hidden', !recommended);
+    ['ai-base', 'ai-model', 'ai-quality-model', 'ai-key'].forEach(function (id) {
+      var input = $('#' + id);
+      input.closest('.ai-row').classList.toggle('hidden', recommended);
+      input.disabled = recommended;
+    });
+    if (recommended && !window.__grafitDesktop) setRecommendedProgress({ message: 'Автоустановка доступна в приложении для Windows. В браузере подключите установленную Ollama через «Локальная модель».', running: false });
   }
+
+  var recommendedSetupRunning = false;
+  function setRecommendedProgress(state) {
+    var el = $('#ai-recommended-progress');
+    if (!el) return;
+    el.textContent = state.message || '';
+    el.className = 'ai-status-line' + (state.error ? ' error' : state.ready ? ' ok' : '');
+    var progress = $('#ai-recommended-bar');
+    progress.value = state.percent || 0;
+    progress.classList.toggle('hidden', !state.running);
+    $('#ai-recommended-setup').disabled = !!state.running || !window.__grafitDesktop;
+    $('#ai-recommended-setup').textContent = state.running ? 'Подготовка…' : state.ready ? 'Проверить готовность' : state.error ? 'Повторить настройку' : 'Настроить рекомендуемый ИИ';
+    if (state.running) setAiStatus('', state.message);
+  }
+  async function setupRecommendedAI() {
+    if (recommendedSetupRunning) return;
+    var bridge = window.__grafitDesktop;
+    if (!bridge || !bridge.recommendedSetup) { aiOllamaToggle(); return; }
+    cancelAiRequest();
+    clearTimeout(aiTimer);
+    clearTimeout(autoContinueTimer);
+    aiCfg = window.GrafitRecommended.apply(Object.assign({}, aiCfg, { enabled: false }));
+    recommendedSetupRunning = true;
+    setRecommendedProgress({ running: true, percent: 0, message: 'Подготавливаю рекомендуемый ИИ…' });
+    try {
+      await bridge.recommendedSetup();
+      if ($('#ai-provider').value === 'recommended') {
+        aiApplyPreset('recommended');
+        $('#ai-enabled').checked = true;
+        aiCfg = readAiForm();
+        saveAiCfg();
+        renderAiPanel();
+        setAiFormStatus('ok', 'Рекомендуемый ИИ готов и включён');
+        setAiStatus('ok', 'Рекомендуемый ИИ готов');
+      }
+      setRecommendedProgress({ ready: true, running: false, percent: 100, message: 'Готово. Быстрые подсказки, структура и формулы работают локально.' });
+    } catch (e) {
+      setRecommendedProgress({ running: false, error: true, message: e.message || 'Не удалось настроить ИИ. Повторите настройку.' });
+      setAiFormStatus('error', 'Настройка не завершена — можно повторить');
+    } finally { recommendedSetupRunning = false; }
+  }
+  window.addEventListener('grafit-ai-setup-progress', function (event) { setRecommendedProgress(event.detail || {}); });
 
   function setAiOllamaStatus(kind, text) {
     var el = $('#ai-ollama-progress');
@@ -2940,14 +3007,20 @@
       aiApplyPreset(this.value);
       aiOllamaToggle();
       if (this.value === 'ollama') aiOllamaRefresh(true);
+      if (this.value === 'recommended') setupRecommendedAI();
     });
     $('#ai-base').addEventListener('input', function () { aiOllamaToggle(); });
     $('#ai-ollama-refresh').addEventListener('click', function () { aiOllamaRefresh(false); });
     $('#ai-ollama-pull').addEventListener('click', aiOllamaPull);
+    $('#ai-recommended-setup').addEventListener('click', setupRecommendedAI);
     $('#ai-ollama-models').addEventListener('change', function () {
       if (this.value) $('#ai-model').value = this.value;
     });
     $('#ai-save').addEventListener('click', function () {
+      if ($('#ai-provider').value === 'recommended') {
+        if (recommendedSetupRunning) { setAiFormStatus('', 'Дождитесь завершения установки'); return; }
+        if ($('#ai-enabled').checked && window.__grafitDesktop) { setupRecommendedAI(); return; }
+      }
       aiCfg = readAiForm();
       saveAiCfg();
       setAiFormStatus('ok', 'Сохранено');

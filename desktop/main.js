@@ -14,6 +14,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const { spawn } = require('child_process');
+const { createRecommendedManager } = require('./recommended-ai.js');
 
 const SMOKE = process.argv.includes('--smoke');
 const QUICK_TEST = process.argv.includes('--quick-test');
@@ -104,6 +105,9 @@ function findEngine() {
     }
   }
   if (process.env.LOCALAPPDATA) candidates.push(path.join(process.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama.exe'));
+  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
+    if (dir) candidates.push(path.join(dir, 'ollama.exe'));
+  }
   for (const c of candidates) {
     try { if (c && fs.existsSync(c)) return c; } catch (e) { /* дальше */ }
   }
@@ -113,6 +117,10 @@ function findEngine() {
 function resolveModelsDir(engineExe) {
   const cfgModels = resolveCfgPath(CONFIG.modelsDir);
   if (cfgModels) { try { if (fs.existsSync(cfgModels)) return cfgModels; } catch (e) { /* дальше */ } }
+  const systemEngine = process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama.exe');
+  if (systemEngine && engineExe.toLowerCase() === systemEngine.toLowerCase()) {
+    return process.env.OLLAMA_MODELS || path.join(app.getPath('home'), '.ollama', 'models');
+  }
   const engineDir = path.dirname(engineExe);
   return path.join(path.dirname(engineDir), 'models');
 }
@@ -132,6 +140,7 @@ async function startEngine() {
     console.log('[engine] Ollama уже запущена — используем её');
     return;
   }
+  if (engineProc && !engineProc.killed) return;
   const exe = findEngine();
   if (!exe) {
     console.log('[engine] движок не найден (grafit.config.json рядом с программой или системный Ollama)');
@@ -144,6 +153,7 @@ async function startEngine() {
   engineProc = spawn(exe, ['serve'], { cwd: engineDir, env, windowsHide: true, stdio: 'ignore' });
   engineStartedByUs = true;
   engineProc.on('exit', function () { engineProc = null; });
+  engineProc.on('error', function (err) { console.log('[engine] ' + err.message); engineProc = null; });
   console.log('[engine] запущен: ' + exe + ' | модели: ' + modelsDir);
 }
 
@@ -507,6 +517,16 @@ app.whenReady().then(async function () {
   try { app.setAppUserModelId('ru.grafit.desktop'); } catch (e) { /* ок */ }
   try { Menu.setApplicationMenu(null); } catch (e) { /* ок: убираем нативное меню, чтобы Alt не перехватывался */ }
   loadConfig();
+  const recommendedAI = createRecommendedManager({ findEngine, startEngine, isUp: isOllamaUp,
+    cacheDir: app.getPath('temp'), onProgress: function (state) {
+      if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('ai:recommended-progress', state);
+    }
+  });
+  function requireMainWindow(ev) {
+    if (!mainWin || ev.sender !== mainWin.webContents || ev.senderFrame !== mainWin.webContents.mainFrame) throw new Error('Недоступно из этого окна');
+  }
+  ipcMain.handle('ai:recommended-status', function (ev) { requireMainWindow(ev); return recommendedAI.status(); });
+  ipcMain.handle('ai:recommended-setup', function (ev) { requireMainWindow(ev); return recommendedAI.ensure(); });
 
   // Локальный Ollama: добавляем CORS-заголовки, чтобы интерфейс мог к нему обращаться
   try {

@@ -328,10 +328,11 @@
       <label class="ai-check-row"><input type="checkbox" id="ai-enabled"> <span>Включить ИИ-помощника</span></label>
       <div class="ai-row"><span class="ai-label">Сервис</span>
         <select id="ai-provider">
-          <option value="openrouter">OpenRouter (рекомендуется)</option>
+          <option value="recommended">Рекомендуемые — настройка автоматически</option>
+          <option value="openrouter">OpenRouter</option>
           <option value="openai">OpenAI</option>
           <option value="groq">Groq</option>
-          <option value="ollama">Ollama (локально)</option>
+          <option value="ollama">Локальная модель — своя Ollama</option>
           <option value="custom">Другое (OpenAI-совместимый)</option>
         </select>
       </div>
@@ -339,6 +340,13 @@
       <div class="ai-row"><span class="ai-label">Модель</span><input id="ai-model" type="text" placeholder="openai/gpt-4o-mini" autocomplete="off" spellcheck="false"></div>
       <div class="ai-row"><span class="ai-label">Для правок</span><input id="ai-quality-model" type="text" placeholder="Пусто — та же модель" autocomplete="off" spellcheck="false" title="Отдельная модель для структуры и формул; продолжение использует основную"></div>
       <div class="ai-row"><span class="ai-label">Ключ API</span><input id="ai-key" type="password" placeholder="Для Ollama не нужен" autocomplete="off"></div>
+      <div class="ai-local hidden" id="ai-recommended-section">
+        <div class="ai-local-head">Рекомендуемый ИИ</div>
+        <div class="ai-note">Графит установит Ollama, если её нет, и скачает две модели: быструю для продолжения и более точную для структуры и формул. Для первой настройки нужны интернет и примерно 10 ГБ свободного места. Затем ИИ работает локально. Модели в этом режиме выбирает приложение.</div>
+        <progress id="ai-recommended-bar" class="hidden" max="100" value="0" style="width:100%"></progress>
+        <div id="ai-recommended-progress" class="ai-status-line">Выберите этот режим или нажмите кнопку настройки.</div>
+        <div class="ai-actions"><button class="primary-btn" id="ai-recommended-setup">Настроить рекомендуемый ИИ</button></div>
+      </div>
       <div class="ai-local hidden" id="ai-local-section">
         <div class="ai-local-head">Локальная модель (Ollama)</div>
         <div class="ai-row"><span class="ai-label">Модели</span>
@@ -399,6 +407,7 @@
 <script src="assets/seeds.js"></script>
 <script src="assets/codemirror.bundle.js"></script>
 <script src="assets/editor-cm.js"></script>
+<script src="assets/ai-recommended.js"></script>
 <script src="assets/ai-core.js"></script>
 <script src="assets/app.js"></script>
 </body>
