@@ -1336,7 +1336,7 @@
     function isCurrent() { return currentId === noteId && ED.getValue() === text && ED.getSel().from === sel.from && ED.getSel().to === sel.to; }
     function showPartial(reply) {
       if (!isCurrent()) return;
-      var continuation = window.GrafitAI.continuation(before, after, reply);
+      var continuation = window.GrafitAI.continuation(before, after, window.GrafitAI.completionResult(context, reply));
       if (continuation) ED.showGhost(continuation, sel.from); else ED.hideGhost();
     }
     ghostMode = null;
@@ -1345,10 +1345,11 @@
     setAiStatus('', 'Придумываю продолжение…');
     try {
       var builtin = context.formula && window.GrafitAI.knownFormula(context.formula);
-      var reply = builtin || await aiChatRaw(window.GrafitAI.completionMessages(context), context.formula ? 700 : 240, context.formula ? null : showPartial, true);
+      var reply = builtin || await aiChatRaw(window.GrafitAI.completionMessages(context), context.formula || context.code ? 700 : 240, context.formula || context.code ? null : showPartial, true);
+      reply = window.GrafitAI.completionResult(context, reply);
       if (context.formula && !/\$\$[\s\S]+\$\$/.test(reply)) throw new Error('Не удалось получить формулу. Уточните название в поле «Формула…».');
       if (!isCurrent()) { ED.hideGhost(); return; }
-      var lines = context.formula ? (after.includes(reply.trim()) ? '' : '\n\n' + window.GrafitAI.clean(reply) + '\n\n') : window.GrafitAI.continuation(before, after, reply);
+      var lines = context.formula || context.code ? (after.includes(reply.trim()) ? '' : '\n\n' + reply + '\n\n') : window.GrafitAI.continuation(before, after, reply);
       if (!lines) { ED.hideGhost(); setAiStatus('', 'Нет нового продолжения'); return; }
       var anchor = sel.from;
       ghostMode = { kind: 'continue', text: lines, pos: anchor, noteId: noteId, source: text };
