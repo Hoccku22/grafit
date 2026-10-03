@@ -25,10 +25,13 @@
 
 ## Скачать
 
+Последний выпуск — **0.5.4**. EXE и список изменений доступны на [странице релиза](https://github.com/Hoccku22/grafit/releases/tag/v0.5.4).
+
 | Файл | Что это |
 |---|---|
-| [Графит-0.5.2-portable.exe](https://github.com/Hoccku22/grafit/releases/latest) | Портативная версия: один файл, без установки |
-| [Графит-0.5.2-setup.exe](https://github.com/Hoccku22/grafit/releases/latest) | Установщик: ярлыки в «Пуск» и на рабочем столе |
+| [Grafit-0.5.4-portable.exe](https://github.com/Hoccku22/grafit/releases/download/v0.5.4/Grafit-0.5.4-portable.exe) | Портативная версия: один файл, без установки |
+| [Grafit-0.5.4-setup.exe](https://github.com/Hoccku22/grafit/releases/download/v0.5.4/Grafit-0.5.4-setup.exe) | Установщик: ярлыки в «Пуск» и на рабочем столе |
+| [Все выпуски](https://github.com/Hoccku22/grafit/releases) | Предыдущие версии и их список изменений |
 | [Веб-версия](https://hoccku22.github.io/grafit/app/) | Открыть в браузере — ничего скачивать не нужно |
 
 ## Скриншоты
