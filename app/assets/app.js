@@ -1234,6 +1234,7 @@
     if (sel.from !== sel.to) { if (manual) toast('Для продолжения поставьте курсор без выделения'); return; }
     var before = text.slice(0, sel.from), after = text.slice(sel.to);
     if (!before.trim()) return;
+    var context = window.GrafitAI.completionContext(note.name, before, after);
     var tail = before.slice(-2400);
     var needsDefinition = /(?:[-—–]\s*(?:это)?|:)\s*$/i.test(tail);
     var noteId = note.id;
@@ -1248,12 +1249,11 @@
     aiContinueBusy = true;
     setAiStatus('', 'Придумываю продолжение…');
     try {
-      var reply = await aiChatRaw([
-        { role: 'system', content: 'Ты дополняешь текст в позиции курсора. Верни ТОЛЬКО недостающий хвост: не повторяй ни слова из текста до курсора. Учитывай текст после курсора и не повторяй его. Заверши незаконченное слово или определение точно и кратко. Пример: до курсора «Компьютер - это», ответ «электронное устройство для обработки данных.» Не добавляй вступлений и кавычек. 1–2 предложения на языке заметки. Не выдумывай факты.' },
-        { role: 'user', content: 'Заметка «' + note.name + '» (фрагмент до курсора):\n\n' + tail + '[КУРСОР]' + after.slice(0, 800) }
-      ], 240, showPartial, needsDefinition);
+      var builtin = context.formula && window.GrafitAI.knownFormula(context.formula);
+      var reply = builtin || await aiChatRaw(window.GrafitAI.completionMessages(context), context.formula ? 700 : 240, context.formula ? null : showPartial, true);
+      if (context.formula && !/\$\$[\s\S]+\$\$/.test(reply)) throw new Error('Не удалось получить формулу. Уточните название в поле «Формула…».');
       if (!isCurrent()) { ED.hideGhost(); return; }
-      var lines = window.GrafitAI.continuation(before, after, reply);
+      var lines = context.formula ? (after.includes(reply.trim()) ? '' : '\n\n' + window.GrafitAI.clean(reply) + '\n\n') : window.GrafitAI.continuation(before, after, reply);
       if (!lines) { ED.hideGhost(); setAiStatus('', 'Нет нового продолжения'); return; }
       var anchor = sel.from;
       ghostMode = { kind: 'continue', text: lines, pos: anchor, noteId: noteId, source: text };
