@@ -1,7 +1,7 @@
 {
   "name": "grafit-desktop",
   "productName": "Графит",
-  "version": "0.5.10",
+  "version": "0.5.11",
   "description": "Графит — десктопный редактор заметок в стиле Obsidian",
   "author": "Hoccku22",
   "main": "main.js",
