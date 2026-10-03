@@ -1,7 +1,7 @@
 {
   "name": "grafit-desktop",
   "productName": "Графит",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "Графит — десктопный редактор заметок в стиле Obsidian",
   "author": "Hoccku22",
   "main": "main.js",
@@ -43,8 +43,18 @@
     "win": {
       "icon": "build/icon.png",
       "target": [
-        { "target": "portable", "arch": ["x64"] },
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "portable": {

@@ -832,6 +832,7 @@
           if (data.provider) aiCfg.provider = String(data.provider);
           if (data.base) aiCfg.base = String(data.base);
           if (data.model) aiCfg.model = String(data.model);
+          if (data.qualityModel) aiCfg.qualityModel = String(data.qualityModel);
           if (data.key) aiCfg.key = String(data.key);
         }
       }
@@ -863,6 +864,7 @@
     $('#ai-provider').value = aiCfg.provider || 'openrouter';
     $('#ai-base').value = aiCfg.base || '';
     $('#ai-model').value = aiCfg.model || '';
+    $('#ai-quality-model').value = aiCfg.qualityModel || '';
     $('#ai-key').value = aiCfg.key || '';
     setAiFormStatus('', '');
     $('#ai-modal').classList.add('open');
@@ -877,6 +879,7 @@
       provider: $('#ai-provider').value || 'custom',
       base: $('#ai-base').value.trim(),
       model: $('#ai-model').value.trim(),
+      qualityModel: $('#ai-quality-model').value.trim(),
       key: $('#ai-key').value.trim()
     };
   }
@@ -1042,37 +1045,9 @@
     var userContent = userText;
     if (/qwen3/i.test(model)) userContent += '\n/no_think';
     if (strict) userContent += '\n\nВАЖНО: предыдущий ответ не был распознан. Ответь ТОЛЬКО валидным JSON, начиная с { и заканчивая } , без пояснений.';
-    var payload = {
-      model: model,
-      messages: [
-        { role: 'system', content: buildAiPrompt() },
-        { role: 'user', content: userContent }
-      ],
-      temperature: 0.2,
-      max_tokens: 1200
-    };
-    var headers = { 'Content-Type': 'application/json' };
-    if (cfg.key) headers['Authorization'] = 'Bearer ' + cfg.key;
-    var res = null;
-    try {
-      res = await fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(payload)
-      });
-    } catch (e) {
-      throw new Error('нет связи с сервисом (проверьте адрес и CORS; на превью AutoClaw внешние запросы блокируются)');
-    }
-    if (!res.ok) {
-      var errText = '';
-      try { errText = (await res.text()).slice(0, 160); } catch (e2) {}
-      throw new Error('сервис ответил ' + res.status + (errText ? ' — ' + errText : ''));
-    }
-    var data = null;
-    try { data = await res.json(); } catch (e3) { throw new Error('ответ сервиса не является JSON'); }
-    var content = '';
-    try { content = data.choices[0].message.content || ''; } catch (e4) {}
-    if (!content) throw new Error('пустой ответ сервиса');
+    var content = await window.GrafitAI.request(cfg, [
+      { role: 'system', content: buildAiPrompt() }, { role: 'user', content: userContent }
+    ], { maxTokens: 1200 });
     aiLastRawContent = content;
     return parseAiSuggestions(content, userText);
   }
@@ -1162,7 +1137,7 @@
     if (!note) { if (manual) toast('Сначала откройте заметку'); return; }
     var text = (note.content || '').trim();
     if (text.length < 20) { if (manual) toast('Слишком короткий текст для проверки'); return; }
-    if (aiBusy) { if (manual) toast('ИИ уже анализирует…'); return; }
+    if (aiBusy || aiContinueBusy || aiTransformBusy) { if (manual) toast('Дождитесь текущего запроса'); return; }
     if (!manual && (Date.now() - aiLastRun < 20000)) return;
     if (!manual && aiLastHash[note.id] === text) return;
     aiLastRun = Date.now();
@@ -1183,6 +1158,7 @@
         renderAiPanel();
       }
     }
+    if ((note.content || '').trim() !== text) { aiBusy = false; renderAiPanel(); return; }
     if (result) {
       aiLastHash[note.id] = text;
       aiSuggestions[note.id] = result;
@@ -1214,12 +1190,16 @@
       toast('Фрагмент уже изменился — подсказка снята', 'error');
       return;
     }
-    note.content = note.content.replace(s.find, s.replace);
+    if (note.content.indexOf(s.find) !== note.content.lastIndexOf(s.find)) { toast('Фрагмент повторяется — уточните правку', 'error'); return; }
+    captureHistory(note);
+    if (note.id === currentId && ED) {
+      var offset = note.content.indexOf(s.find);
+      ED.replaceRange(offset, offset + s.find.length, s.replace);
+    } else note.content = note.content.replace(s.find, s.replace);
     note.updated = Date.now();
     markDirty(note.id);
     persist();
     if (note.id === currentId) {
-      if (ED) ED.setValue(note.content);
       renderPreview();
       renderOutline();
       renderMeta();
@@ -1249,42 +1229,74 @@
     ghostMode = null;
     if (g.kind === 'fix' && g.idx != null) { aiApply(g.noteId, g.idx); return; }
     if (g.kind === 'continue' && g.text && ED) {
+      if (g.source != null && (currentId !== g.noteId || ED.getValue() !== g.source || ED.getSel().from !== g.pos)) { ED.hideGhost(); return; }
       var t = g.text;
       var pos = (typeof g.pos === 'number') ? Math.min(g.pos, ED.length()) : ED.getSel().from;
       var before = ED.getValue().slice(0, pos);
-      if (before && !/\s$/.test(before) && !/^\s/.test(t)) t = ' ' + t;
+      if (g.source == null && before && !/\s$/.test(before) && !/^\s/.test(t)) t = ' ' + t;
       ED.insertAt(t, pos, pos);
       toast('Продолжение добавлено', 'ok');
     }
   }
 
-  async function aiChatRaw(messages, maxTokens) {
-    var base = String((aiCfg && aiCfg.base) || '').replace(/\/+$/, '');
-    if (!base) throw new Error('не указан адрес API');
-    var model = (aiCfg && aiCfg.model) || 'gpt-4o-mini';
-    var msgs = messages.slice();
-    if (/qwen3/i.test(model) && msgs.length) {
-      var li = msgs.length - 1;
-      msgs[li] = { role: msgs[li].role, content: msgs[li].content + '\n/no_think' };
+  var aiController = null;
+  var aiTransformBusy = false;
+  function cancelAiRequest() {
+    if (aiController) aiController.abort();
+    var preview = $('#ai-edit-preview');
+    if (preview) preview.classList.add('hidden');
+    ghostMode = null;
+    if (ED) ED.hideGhost();
+  }
+  async function aiChatRaw(messages, maxTokens, onChunk, quality) {
+    aiController = new AbortController();
+    return window.GrafitAI.request(Object.assign({}, aiCfg, { model: quality && aiCfg.qualityModel ? aiCfg.qualityModel : aiCfg.model }), messages, { maxTokens: maxTokens || 240,
+      signal: aiController.signal, onChunk: onChunk });
+  }
+
+  async function aiTransform(kind) {
+    if (!aiCfg) loadAiCfg();
+    if (!aiCfg.enabled || (!aiCfg.key && !aiIsLocal())) { openAiSettings(); return; }
+    if (!ED || !currentId || viewMode === 'read') { toast('Откройте заметку в режиме редактирования'); return; }
+    if (aiBusy || aiContinueBusy || aiTransformBusy) { toast('Дождитесь текущего запроса'); return; }
+    var noteId = currentId, original = ED.getValue(), sel = ED.getSel();
+    var from = sel.from, to = sel.to;
+    var source = original.slice(from, to), instruction;
+    if (kind === 'structure') {
+      if (from === to) { from = 0; to = original.length; source = original; }
+      if (!source.trim()) { toast('Сначала напишите конспект'); return; }
+      if (source.length > 24000) { toast('Выделите фрагмент до 24 000 символов'); return; }
+      instruction = 'Структурируй конспект в Markdown: осмысленные заголовки ## и ###, абзацы, списки, выделение терминов. Сохрани все факты, числа, формулы и смысл. Не добавляй сведения, которых нет в исходнике. Сохрани frontmatter, код и ссылки. Верни только полный преобразованный фрагмент без вступления и внешних блоков кода.';
+    } else {
+      source = $('#ai-formula-name').value.trim() || source.trim();
+      if (!source) { $('#ai-formula-name').focus(); toast('Введите название формулы или выделите его в заметке'); return; }
+      instruction = 'По названию запиши математическую формулу в LaTeX между отдельными строками $$, затем кратко поясни обозначения и условия применимости. Если название неоднозначно, явно назови выбранный вариант. Не выдумывай неизвестную формулу: попроси уточнить. Верни только Markdown без внешнего блока кода.';
     }
-    var headers = { 'Content-Type': 'application/json' };
-    if (aiCfg && aiCfg.key) headers['Authorization'] = 'Bearer ' + aiCfg.key;
-    var res = null;
+    aiTransformBusy = true;
+    setAiStatus('', kind === 'structure' ? 'Структурирую конспект…' : 'Подбираю формулу…');
+    var box = $('#ai-edit-preview'), output = $('#ai-edit-result');
+    box.classList.remove('hidden'); output.textContent = '';
+    $('#ai-edit-apply').disabled = true;
     try {
-      res = await fetch(base + '/chat/completions', {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({ model: model, messages: msgs, temperature: 0.6, max_tokens: maxTokens || 220 })
-      });
-    } catch (e) { throw new Error('нет связи с сервисом (проверьте адрес и CORS)'); }
-    if (!res.ok) throw new Error('сервис ответил ' + res.status);
-    var data = null;
-    try { data = await res.json(); } catch (e2) { throw new Error('ответ сервиса не является JSON'); }
-    var content = '';
-    try { content = data.choices[0].message.content || ''; } catch (e3) {}
-    content = String(content).replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').replace(/\/no_think/g, '').trim();
-    if (!content) throw new Error('пустой ответ сервиса');
-    return content;
+      var result = window.GrafitAI.clean(await aiChatRaw([
+        { role: 'system', content: instruction }, { role: 'user', content: source }
+      ], kind === 'structure' ? 6000 : 900, function (text) { output.textContent = window.GrafitAI.clean(text); }, true));
+      if (from > 0 && original[from - 1] !== '\n') result = '\n\n' + result;
+      if (to < original.length && original[to] !== '\n') result += '\n\n';
+      output.textContent = result;
+      $('#ai-edit-apply').disabled = false;
+      $('#ai-edit-apply').onclick = function () {
+        if (currentId !== noteId || ED.getValue() !== original) { toast('Текст изменился — повторите запрос', 'error'); return; }
+        captureHistory(getItem(noteId));
+        ED.insertAt(result, from, to);
+        box.classList.add('hidden');
+        setAiStatus('ok', 'Правка применена. Ctrl+Z — отменить');
+      };
+      setAiStatus('ok', 'Проверьте результат и нажмите «Применить»');
+    } catch (e) {
+      box.classList.add('hidden');
+      if (e.name !== 'AbortError') setAiStatus('error', e.message);
+    } finally { aiTransformBusy = false; }
   }
 
   async function aiContinue(manual) {
@@ -1294,28 +1306,41 @@
     var note = currentId && getItem(currentId);
     if (!note || !ED) { if (manual) toast('Сначала откройте заметку'); return; }
     if (viewMode === 'read') { if (manual) toast('Продолжение доступно в режиме редактирования (Ctrl+E)'); return; }
-    if (aiContinueBusy || aiBusy) { if (manual) toast('ИИ уже думает…'); return; }
+    if (aiContinueBusy || aiBusy || aiTransformBusy) { if (manual) toast('ИИ уже думает…'); return; }
     var text = ED.getValue();
     if (!text.trim()) { if (manual) toast('Пустая заметка — продолжать нечего'); return; }
-    if (!manual && text.trim().length < 16) return;
+    if (!manual && text.trim().length < 8) return;
     if (!manual && ED.hasGhost()) return;
     var sel = ED.getSel();
-    var tail = text.slice(0, sel.from).slice(-1400);
+    if (sel.from !== sel.to) { if (manual) toast('Для продолжения поставьте курсор без выделения'); return; }
+    var before = text.slice(0, sel.from), after = text.slice(sel.to);
+    if (!before.trim()) return;
+    var tail = before.slice(-2400);
+    var noteId = note.id;
+    function isCurrent() { return currentId === noteId && ED.getValue() === text && ED.getSel().from === sel.from && ED.getSel().to === sel.to; }
+    function showPartial(reply) {
+      if (!isCurrent()) return;
+      var continuation = window.GrafitAI.continuation(before, after, reply);
+      if (continuation) ED.showGhost(continuation, sel.from);
+    }
     aiContinueBusy = true;
     setAiStatus('', 'Придумываю продолжение…');
     try {
       var reply = await aiChatRaw([
-        { role: 'system', content: 'Ты помогаешь дописывать заметки. Продолжи текст сразу после курсора: 1–2 коротких предложения в том же стиле. Верни только само продолжение, без кавычек, пояснений и markdown-обёрток. Пиши на языке текста.' },
-        { role: 'user', content: 'Заметка «' + note.name + '» (фрагмент до курсора):\n\n' + tail + '\n\n[КУРСОР ЗДЕСЬ] Продолжи с этой точки:' }
-      ], 220);
-      var lines = reply.split('\n').filter(function (l) { return l.trim(); }).slice(0, 3).join('\n');
+        { role: 'system', content: 'Ты дополняешь текст в позиции курсора. Верни ТОЛЬКО недостающий хвост: не повторяй ни слова из текста до курсора. Учитывай текст после курсора и не повторяй его. Заверши незаконченное слово или определение точно и кратко. Пример: до курсора «Компьютер - это», ответ «электронное устройство для обработки данных.» Не добавляй вступлений и кавычек. 1–2 предложения на языке заметки. Не выдумывай факты.' },
+        { role: 'user', content: 'Заметка «' + note.name + '» (фрагмент до курсора):\n\n' + tail + '[КУРСОР]' + after.slice(0, 800) }
+      ], 240, showPartial);
+      if (!isCurrent()) { ED.hideGhost(); return; }
+      var lines = window.GrafitAI.continuation(before, after, reply);
       if (!lines) { setAiStatus('', 'Пустой ответ'); return; }
       var anchor = sel.from;
-      ghostMode = { kind: 'continue', text: lines, pos: anchor };
+      ghostMode = { kind: 'continue', text: lines, pos: anchor, noteId: noteId, source: text };
       ED.showGhost(lines, anchor);
       setAiStatus('', 'Серое продолжение в тексте — Tab, чтобы принять');
       try { ED.focus(); } catch (e2) { /* ок */ }
     } catch (e) {
+      ED.hideGhost();
+      if (e.name === 'AbortError') { setAiStatus('', 'Запрос отменён'); return; }
       setAiStatus('error', (e && e.message) || 'не получилось');
       if (manual) toast('ИИ: ' + ((e && e.message) || 'ошибка'), 'error');
     } finally {
@@ -1328,17 +1353,17 @@
   function scheduleAutoContinue() {
     if (autoContinueTimer) { clearTimeout(autoContinueTimer); autoContinueTimer = null; }
     if (!aiCfg || !aiCfg.enabled || !aiCfg.auto) return;
-    if (viewMode === 'read' || aiBusy || aiContinueBusy || !ED || !currentId) return;
+    if (viewMode === 'read' || aiBusy || aiContinueBusy || aiTransformBusy || !ED || !currentId) return;
     autoContinueTimer = setTimeout(function () {
       autoContinueTimer = null;
       if (!aiCfg || !aiCfg.enabled || !aiCfg.auto) return;
-      if (viewMode === 'read' || aiBusy || aiContinueBusy || !ED || !currentId) return;
+      if (viewMode === 'read' || aiBusy || aiContinueBusy || aiTransformBusy || !ED || !currentId) return;
       if (ED.hasGhost()) return;
       var now = Date.now();
-      if (now - lastAutoContinue < 10000) return;
+      if (now - lastAutoContinue < 5000) return;
       lastAutoContinue = now;
       aiContinue(false);
-    }, 1900);
+    }, 1100);
   }
 
   /* ----- подсветка подсказок прямо в тексте ----- */
@@ -2017,6 +2042,7 @@
   function openNote(id) {
     var note = getItem(id);
     if (!note || note.type !== 'note') return;
+    cancelAiRequest();
     currentId = id;
     showPlaceholder(false);
     $('#note-title').value = note.name;
@@ -2274,6 +2300,7 @@
 
   function editorInput() {
     if (!ED) return;
+    cancelAiRequest();
     var note = currentId && getItem(currentId);
     if (!note) {
       // защита: если текущая запись потерялась (например, удалена), не теряем ввод
@@ -2948,7 +2975,10 @@
       text: '',
       placeholder: 'Пишите здесь в Markdown…',
       onChange: function () { editorInput(); },
-      onSelection: function () { updateAiPopup(); },
+      onSelection: function () {
+        if (ghostMode && ghostMode.kind === 'continue' && ED.getSel().from !== ghostMode.pos) cancelAiRequest();
+        updateAiPopup();
+      },
       onScroll: function () { updateAiPopup(); },
       onGhostAccept: function () { acceptGhost(); },
       onGhostRequest: function () { aiContinue(true); },
@@ -3081,6 +3111,10 @@
     $('#ai-open-settings').addEventListener('click', function () { openAiSettings(); });
     $('#ai-check').addEventListener('click', function () { aiAnalyze(true); });
     $('#ai-continue').addEventListener('click', function () { aiContinue(true); });
+    $('#ai-structure').addEventListener('click', function () { aiTransform('structure'); });
+    $('#ai-formula').addEventListener('click', function () { aiTransform('formula'); });
+    ['ai-structure', 'ai-formula'].forEach(function (id) { $('#' + id).addEventListener('mousedown', function (e) { e.preventDefault(); }); });
+    $('#ai-edit-dismiss').addEventListener('click', function () { cancelAiRequest(); $('#ai-edit-preview').classList.add('hidden'); });
     $('#ai-check').addEventListener('mousedown', function (e) { e.preventDefault(); });
     $('#ai-continue').addEventListener('mousedown', function (e) { e.preventDefault(); });
     $('#ai-auto').addEventListener('click', function () {

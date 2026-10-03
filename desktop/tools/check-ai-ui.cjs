@@ -1,0 +1,53 @@
+const { app, BrowserWindow } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'grafit-ai-check-')));
+app.whenReady().then(async () => {
+  const win = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true } });
+  try {
+    await win.loadFile(path.join(__dirname, process.argv.includes('--web') ? '../../app/index.html' : '../app/index.html'));
+    await win.webContents.executeJavaScript(`localStorage.setItem('vault.ai', JSON.stringify({enabled:true,auto:false,provider:'ollama',base:'http://mock/v1',model:'mock'}));`);
+    await win.reload();
+    await new Promise(resolve => win.webContents.once('did-finish-load', resolve));
+    const result = await win.webContents.executeJavaScript(`(async function () {
+      const pause = () => new Promise(r => setTimeout(r, 80));
+      const assert = (ok, label) => { if (!ok) throw new Error(label); };
+      const editor = window.__grafitEditor;
+      let reply = 'Компьютер — это электронное устройство.';
+      window.fetch = async () => new Response(JSON.stringify({choices:[{message:{content:reply}}]}), {headers:{'content-type':'application/json'}});
+      editor.set(''); editor.insert('Компьютер - это'); editor.setSel(editor.get().length);
+      document.querySelector('#ai-continue').click(); await pause();
+      assert(editor.hasGhost(), 'completion ghost');
+      editor.focus();
+      document.querySelector('.cm-content').dispatchEvent(new KeyboardEvent('keydown', {key:'Tab',code:'Tab',bubbles:true,cancelable:true}));
+      assert(editor.get() === 'Компьютер - это электронное устройство.', 'completion without repeated prefix');
+      const original = 'Процессор выполняет команды. Память хранит данные.';
+      editor.set(''); editor.insert(original);
+      reply = '## Компьютер\\n\\n### Процессор\\n\\nПроцессор выполняет команды.\\n\\n### Память\\n\\nПамять хранит данные.';
+      document.querySelector('#ai-structure').click(); await pause();
+      assert(editor.get() === original, 'preview leaves source intact');
+      document.querySelector('#ai-edit-apply').click();
+      assert(editor.get() === reply, 'structure replaces original');
+      editor.focus();
+      document.querySelector('.cm-content').dispatchEvent(new KeyboardEvent('keydown', {key:'z',code:'KeyZ',ctrlKey:true,bubbles:true,cancelable:true}));
+      assert(editor.get() === original, 'structure undo');
+      editor.setSel(editor.get().length);
+      reply = '\\n\\n$$\\na^2 + b^2 = c^2\\n$$';
+      document.querySelector('#ai-formula-name').value = 'Теорема Пифагора';
+      document.querySelector('#ai-formula').click(); await pause();
+      document.querySelector('#ai-edit-apply').click(); await new Promise(r=>setTimeout(r,400));
+      assert(editor.get().includes('a^2 + b^2 = c^2'), 'formula insertion');
+      assert(document.querySelector('.katex') && document.querySelector('.katex').textContent.includes('a'), 'formula rendering');
+      editor.setSel(editor.get().length);
+      reply = 'Устаревший ответ.';
+      window.fetch = async () => { await new Promise(r => setTimeout(r,100)); return new Response(JSON.stringify({choices:[{message:{content:reply}}]}), {headers:{'content-type':'application/json'}}); };
+      document.querySelector('#ai-continue').click(); editor.insert(' Новая мысль.');
+      await new Promise(r => setTimeout(r,200));
+      assert(!editor.hasGhost(), 'stale completion discarded');
+      return 'AI_UI_CHECK_OK';
+    })()`);
+    console.log(result);
+    app.exit(0);
+  } catch (e) { console.error(e); app.exit(1); }
+});

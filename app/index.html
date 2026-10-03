@@ -14,6 +14,7 @@
   <title>Графит — заметки в стиле Obsidian</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/katex/katex.min.css">
 </head>
 <body>
 <div class="app" id="app">
@@ -174,10 +175,17 @@
       <div class="ai-controls">
         <button class="ai-btn" id="ai-check">Проверить</button>
         <button class="ai-btn" id="ai-continue" title="Продолжение появится серым в строке; Tab — принять (Alt Alt или Ctrl+Space)">Продолжить</button>
+        <button class="ai-btn" id="ai-structure" title="Структурировать выделение или всю заметку">Структура</button>
+        <button class="ai-btn" id="ai-formula">Формула…</button>
         <button class="ai-btn on" id="ai-auto" title="Автопроверка при наборе">Авто: вкл</button>
         <button class="ai-btn" id="ai-open-settings" title="Настройки ИИ">Настройки</button>
       </div>
+      <div class="ai-row"><input id="ai-formula-name" type="text" aria-label="Название формулы" placeholder="Название формулы, например: теорема Пифагора"></div>
       <div id="ai-status-line" class="ai-status-line"></div>
+      <div id="ai-edit-preview" class="hidden">
+        <pre id="ai-edit-result" class="ai-raw" style="max-height:320px;font-size:12px"></pre>
+        <div class="ai-actions"><button class="ai-btn" id="ai-edit-apply" disabled>Применить</button><button class="ai-btn" id="ai-edit-dismiss">Отменить</button></div>
+      </div>
       <div id="ai-suggestions"></div>
       <div class="ai-disclaimer">Текст заметок отправляется в выбранный вами сервис ИИ при проверке и продолжении. Серые подсказки принимаются клавишей Tab; продолжение — Alt Alt или Ctrl+Space (можно и автоматически — переключатель «Авто»).</div>
     </div>
@@ -329,6 +337,7 @@
       </div>
       <div class="ai-row"><span class="ai-label">Адрес API</span><input id="ai-base" type="text" placeholder="https://openrouter.ai/api/v1" autocomplete="off" spellcheck="false"></div>
       <div class="ai-row"><span class="ai-label">Модель</span><input id="ai-model" type="text" placeholder="openai/gpt-4o-mini" autocomplete="off" spellcheck="false"></div>
+      <div class="ai-row"><span class="ai-label">Для правок</span><input id="ai-quality-model" type="text" placeholder="Пусто — та же модель" autocomplete="off" spellcheck="false" title="Отдельная модель для структуры и формул; продолжение использует основную"></div>
       <div class="ai-row"><span class="ai-label">Ключ API</span><input id="ai-key" type="password" placeholder="Для Ollama не нужен" autocomplete="off"></div>
       <div class="ai-local hidden" id="ai-local-section">
         <div class="ai-local-head">Локальная модель (Ollama)</div>
@@ -338,7 +347,8 @@
         <div class="ai-actions"><button class="ai-btn" id="ai-ollama-refresh">Обновить список</button></div>
         <div class="ai-row"><span class="ai-label">Скачать</span>
           <select id="ai-ollama-catalog">
-            <option value="qwen2.5:1.5b">qwen2.5:1.5b — рекомендуемая, ≈1 ГБ</option>
+            <option value="qwen2.5:1.5b">qwen2.5:1.5b — быстрая, ≈1 ГБ</option>
+            <option value="qwen3:4b-instruct">qwen3:4b-instruct — для структуры и формул, ≈2.5 ГБ</option>
             <option value="qwen3:1.7b">qwen3:1.7b — поумнее, ≈1.4 ГБ</option>
             <option value="gemma3:1b">gemma3:1b — самая лёгкая, ≈0.8 ГБ</option>
             <option value="gemma2:2b">gemma2:2b — от Google, ≈1.6 ГБ</option>
@@ -349,7 +359,7 @@
         <div class="ai-actions"><button class="primary-btn" id="ai-ollama-pull">Скачать модель</button></div>
         <div id="ai-pull-wrap" class="ai-progress hidden"><div id="ai-pull-bar" class="ai-progress-bar"></div></div>
         <div id="ai-ollama-progress" class="ai-status-line"></div>
-        <div class="ai-note">Локальные модели работают без интернета и без ключей. Установите Ollama с сайта ollama.com и запустите её. Чтобы браузер мог к ней обращаться, разрешите запросы: выполните в PowerShell <code>[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS","*","User")</code> и перезапустите Ollama. Затем выберите модель и нажмите «Скачать» — всё загрузится прямо отсюда.</div>
+        <div class="ai-note">Для быстрого продолжения можно оставить qwen2.5:1.5b. Для структуры и формул скачайте qwen3:4b-instruct и укажите её в поле «Для правок». Скорость зависит от вашего компьютера. Локальные модели работают без интернета и без ключей. Установите Ollama с сайта ollama.com и запустите её. Чтобы браузер мог к ней обращаться, разрешите запросы: выполните в PowerShell <code>[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS","*","User")</code> и перезапустите Ollama. Затем выберите модель и нажмите «Скачать» — всё загрузится прямо отсюда.</div>
       </div>
       <div class="ai-actions">
         <button class="ai-btn" id="ai-test">Проверить соединение</button>
@@ -384,10 +394,12 @@
 <input type="file" id="file-json" accept=".json,application/json" class="hidden">
 <input type="file" id="file-md" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple class="hidden">
 
+<script src="assets/katex/katex.min.js"></script>
 <script src="assets/markdown.js"></script>
 <script src="assets/seeds.js"></script>
 <script src="assets/codemirror.bundle.js"></script>
 <script src="assets/editor-cm.js"></script>
+<script src="assets/ai-core.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>

@@ -11,7 +11,7 @@ const read = function (file) { return fs.readFileSync(path.join(root, file), 'ut
 
 // Проверяем парсинг каждого изменяемого скрипта, чтобы не получить пустое окно
 // из-за синтаксической ошибки в браузерном коде.
-['main.js', 'preload.js', 'app/assets/app.js', 'app/assets/markdown.js', 'app/assets/editor-cm.js'].forEach(function (file) {
+['main.js', 'preload.js', 'app/assets/app.js', 'app/assets/markdown.js', 'app/assets/editor-cm.js', 'app/assets/ai-core.js'].forEach(function (file) {
   new Function(read(file));
 });
 

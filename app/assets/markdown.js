@@ -34,6 +34,13 @@
       .replace(/`[^`\n]*`/g, ' ');
   }
 
+  function renderMath(tex, display) {
+    var engine = typeof window !== 'undefined' ? window.katex : null;
+    if (!engine && typeof require !== 'undefined') engine = require('./katex/katex.min.js');
+    if (!engine) return '<code>' + escapeHtml(tex) + '</code>';
+    return engine.renderToString(tex, { displayMode: display, throwOnError: false, trust: false, maxExpand: 1000, maxSize: 20 });
+  }
+
   /* ---------- inline ---------- */
 
   function renderInline(text) {
@@ -43,6 +50,13 @@
     // строчный код — первым, чтобы не трогать его содержимое дальше
     s = s.replace(/`([^`\n]+)`/g, function (m, c) {
       codes.push(c);
+      return '\u0000' + (codes.length - 1) + '\u0000';
+    });
+
+    // Protect formulas from Markdown emphasis, links and escaping.
+    s = s.replace(/(?<!\\)\$([^$\n]+?)\$/g, function (m, tex) {
+      var decoded = tex.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      codes.push({ math: renderMath(decoded, false) });
       return '\u0000' + (codes.length - 1) + '\u0000';
     });
 
@@ -79,7 +93,7 @@
 
     // вернуть код на место
     s = s.replace(/\u0000(\d+)\u0000/g, function (m, k) {
-      return '<code>' + codes[+k] + '</code>';
+      return codes[+k].math || ('<code>' + codes[+k] + '</code>');
     });
 
     return s;
@@ -206,6 +220,20 @@
         continue;
       }
 
+      // Display formulas: $...$ or a multiline block.
+      if (/^\s*\$\$/.test(line)) {
+        var formula = line.trim().slice(2), mathLines = [];
+        if (formula.endsWith('$')) { mathLines.push(formula.slice(0, -2)); i++; }
+        else {
+          if (formula) mathLines.push(formula);
+          i++;
+          while (i < lines.length && !/^\s*\$\$\s*$/.test(lines[i])) mathLines.push(lines[i++]);
+          if (i < lines.length) i++;
+        }
+        out.push('<div class="math-block">' + renderMath(mathLines.join('\n'), true) + '</div>');
+        continue;
+      }
+
       // заголовок
       var h = RE_HEADING.exec(line);
       if (h) {
@@ -277,7 +305,7 @@
       while (i < lines.length) {
         var l = lines[i];
         if (!l.trim()) break;
-        if (RE_FENCE.test(l)) break;
+        if (RE_FENCE.test(l) || /^\s*\$\$/.test(l)) break;
         if (RE_HEADING.test(l)) break;
         if (RE_HR.test(l)) break;
         if (RE_QUOTE.test(l)) break;

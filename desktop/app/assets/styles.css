@@ -775,3 +775,6 @@ kbd {
   #toolbar { display: none; }
   .nh-title-wrap { max-width: 60%; }
 }
+
+.math-block { overflow-x: auto; padding: 6px 0; }
+#ai-formula-name { width: 100%; min-width: 0; }

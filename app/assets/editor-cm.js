@@ -244,7 +244,7 @@
       insertAt: function (text, from, to) {
         from = clamp(from || 0, 0, view.state.doc.length);
         to = (to == null) ? from : clamp(to, from, view.state.doc.length);
-        view.dispatch({ changes: { from: from, to: to, insert: String(text) }, selection: { anchor: from + String(text).length } });
+        view.dispatch({ changes: { from: from, to: to, insert: String(text) }, selection: { anchor: from + String(text).length }, userEvent: 'input.ai' });
         view.focus();
       },
       insert: function (text) {
@@ -254,7 +254,7 @@
       replaceRange: function (from, to, text) {
         from = clamp(from || 0, 0, view.state.doc.length);
         to = clamp(to || from, from, view.state.doc.length);
-        view.dispatch({ changes: { from: from, to: to, insert: String(text) } });
+        view.dispatch({ changes: { from: from, to: to, insert: String(text) }, userEvent: 'input.ai' });
       },
       wrapSel: function (pre, post, ph) {
         var m = view.state.selection.main;
