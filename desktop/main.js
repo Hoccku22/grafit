@@ -9,7 +9,7 @@
    - Упаковывается electron-builder-ом в портативный .exe и установщик (npm run dist). */
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, session, Tray, Menu, globalShortcut, screen, nativeImage, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, Tray, Menu, globalShortcut, screen, nativeImage, Notification, shell } = require('electron');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -184,6 +184,22 @@ function createWindow() {
   }
   const win = new BrowserWindow(opts);
   mainWin = win;
+
+  // Заметки могут содержать внешние ссылки. Страница приложения всегда должна
+  // оставаться локальной: внешние адреса открываем в обычном браузере, где нет
+  // доступа к нативному файловому мостику.
+  win.webContents.on('will-navigate', function (event, url) {
+    if (url !== win.webContents.getURL()) event.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(function (details) {
+    try {
+      const protocol = new URL(details.url).protocol;
+      if (protocol === 'https:' || protocol === 'http:' || protocol === 'mailto:') {
+        shell.openExternal(details.url);
+      }
+    } catch (e) { /* некорректная ссылка просто не открывается */ }
+    return { action: 'deny' };
+  });
 
   // Закрытие окна прячет программу в трей (чтобы работали быстрая заметка и глобальная клавиша)
   win.on('close', function (e) {
@@ -534,6 +550,10 @@ app.whenReady().then(async function () {
   });
   ipcMain.handle('fs:exists', async function (ev, p) {
     return fs.existsSync(p);
+  });
+  ipcMain.handle('fs:rename', async function (ev, from, to) {
+    await fsp.rename(String(from), String(to));
+    return true;
   });
   ipcMain.handle('dlg:pickFolder', async function () {
     const r = await dialog.showOpenDialog({ properties: ['openDirectory'], title: 'Выберите папку хранилища' });

@@ -1,13 +1,14 @@
 {
   "name": "grafit-desktop",
   "productName": "Графит",
-  "version": "0.5.2",
+  "version": "0.5.4",
   "description": "Графит — десктопный редактор заметок в стиле Obsidian",
   "author": "Hoccku22",
   "main": "main.js",
   "private": true,
   "scripts": {
     "start": "electron .",
+    "check": "node tools/check-source.js",
     "smoke": "electron . --smoke",
     "shot": "electron . --smoke --shot=shot.png",
     "quick": "electron . --quick-test",
@@ -22,6 +23,7 @@
   "build": {
     "appId": "ru.grafit.desktop",
     "productName": "Графит",
+    "npmRebuild": false,
     "directories": {
       "output": "dist",
       "buildResources": "build"

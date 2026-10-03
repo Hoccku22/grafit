@@ -36,7 +36,10 @@
     try { return new Date(ts).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }); }
     catch (e) { return ''; }
   }
-  function safeName(name) { return String(name || '').replace(/[\\/:*?"<>|]/g, '-').trim() || 'Заметка'; }
+  function safeName(name) {
+    var result = String(name || '').replace(/[\\/:*?"<>|]/g, '-').trim();
+    return result && result !== '.' && result !== '..' ? result : 'Заметка';
+  }
   function downloadBlob(text, filename, mime) {
     var blob = new Blob([text], { type: mime || 'text/plain;charset=utf-8' });
     var url = URL.createObjectURL(blob);
@@ -87,6 +90,7 @@
   var LS_RIGHT = 'vault.right';
   var LS_SESSION = 'vault.session';
   var LS_SPLIT = 'vault.split';
+  var LS_HISTORY = 'vault.noteHistory.v1';
 
   var FSA_OK = typeof window.showDirectoryPicker === 'function';
 
@@ -99,6 +103,8 @@
   var savedAt = 0;
   var collapsed = {};
   var dirty = {};
+  var noteHistory = {};
+  var historyLastCapture = {};
   var lastDiskCheck = 0;
   var cloudChoice = 'yandex';
   var aiCfg = null;
@@ -203,6 +209,48 @@
   function setSaved() { savedAt = Date.now(); updateStatus(); }
 
   function markDirty(id) { dirty[id] = true; }
+
+  /* ---------- локальная история версий ---------- */
+
+  function loadHistory() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(LS_HISTORY) || '{}');
+      noteHistory = parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) { noteHistory = {}; }
+  }
+
+  function saveHistory() {
+    try { localStorage.setItem(LS_HISTORY, JSON.stringify(noteHistory)); }
+    catch (e) { /* история необязательна, заметка уже сохраняется отдельно */ }
+  }
+
+  function historyKey(note) {
+    var h = disk && disk.handles ? disk.handles.get(note.id) : null;
+    return h && h.__path ? ('disk:' + String(h.__path).toLowerCase()) : ('local:' + note.id);
+  }
+
+  function historyEntries(note) {
+    if (!note) return [];
+    return noteHistory[historyKey(note)] || [];
+  }
+
+  function captureHistory(note) {
+    if (!note || note.type !== 'note') return;
+    var text = String(note.content || '');
+    var key = historyKey(note);
+    var list = noteHistory[key] || [];
+    if (list.length && list[0].content === text) return;
+    list.unshift({ at: Date.now(), content: text });
+    noteHistory[key] = list.slice(0, 20);
+    historyLastCapture[key] = Date.now();
+    saveHistory();
+  }
+
+  function maybeCaptureHistory(note) {
+    if (!note) return;
+    var key = historyKey(note);
+    if (!historyLastCapture[key] || Date.now() - historyLastCapture[key] >= 1800) captureHistory(note);
+  }
 
   /* ---------- облако: провайдеры и мастер подключения ---------- */
 
@@ -538,12 +586,13 @@
       } catch (e) { /* файл недоступен — пропускаем */ }
     }
     try { added = await scanDiskNew(disk.root, null, 0); } catch (e) { /* ничего */ }
+    var removed = await removeMissingDiskItems();
 
-    if (changed || added) {
+    if (changed || added || removed) {
       renderTree();
       renderTagsPanel();
       updateStatus();
-      toast('☁️ Из папки подтянуто: изменено ' + changed + ', добавлено ' + added, 'ok');
+      toast('☁️ Из папки подтянуто: изменено ' + changed + ', добавлено ' + added + ', удалено ' + removed, 'ok');
     } else if (manual === true) {
       toast('Изменений нет — всё уже синхронизировано', 'ok');
     }
@@ -593,6 +642,52 @@
       }
     }
     return added;
+  }
+
+  // fs.watch сообщает об изменении, но не различает удаление и переименование.
+  // В десктопной версии уточняем наличие известных путей, чтобы дерево не
+  // оставляло фантомные заметки, а внешний rename выглядел как новый файл.
+  async function removeMissingDiskItems() {
+    if (!window.__grafitDesktop || !window.__grafitDesktop.exists || !disk) return 0;
+    var missing = {};
+    var items = allItems();
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (dirty[item.id]) continue;
+      var handle = disk.handles.get(item.id);
+      if (!handle || !handle.__path) continue;
+      try {
+        if (!(await window.__grafitDesktop.exists(handle.__path))) missing[item.id] = true;
+      } catch (e) { /* временная ошибка доступа не считается удалением */ }
+    }
+    var roots = items.filter(function (item) {
+      if (!missing[item.id]) return false;
+      var parent = item.parent;
+      while (parent) {
+        if (missing[parent]) return false;
+        var parentItem = getItem(parent);
+        parent = parentItem ? parentItem.parent : null;
+      }
+      return true;
+    });
+    if (!roots.length) return 0;
+    var removed = 0;
+    var currentRemoved = false;
+    roots.forEach(function (root) {
+      [root].concat(descendantsOf(root.id)).forEach(function (item) {
+        if (!getItem(item.id)) return;
+        if (item.id === currentId) currentRemoved = true;
+        disk.handles.delete(item.id);
+        delete dirty[item.id];
+        delete vault.items[item.id];
+        removed++;
+      });
+    });
+    if (currentRemoved) {
+      currentId = null;
+      selectFallbackNote();
+    }
+    return removed;
   }
 
   async function refreshDiskVault(manual) {
@@ -1649,19 +1744,61 @@
     persist();
   }
 
-  function renameItem(id, newName) {
+  async function renameItem(id, newName) {
     var it = getItem(id);
     if (!it) return;
     newName = String(newName || '').trim();
     if (!newName || newName === it.name) return;
+    var duplicate = childrenOf(it.parent).some(function (child) {
+      return child.id !== it.id && child.name.toLowerCase() === newName.toLowerCase();
+    });
+    if (duplicate) {
+      toast('В этой папке уже есть объект с таким именем', 'error');
+      if (currentId === id) $('#note-title').value = it.name;
+      return;
+    }
     var old = it.name;
+
+    if (vaultMode === 'disk') {
+      var handle = disk && disk.handles.get(it.id);
+      var parentHandle = disk && (it.parent ? disk.handles.get(it.parent) : disk.root);
+      if (!handle || !handle.__path || !parentHandle || !parentHandle.__path || !window.__grafitDesktop || !window.__grafitDesktop.rename) {
+        toast('Не удалось переименовать объект на диске', 'error');
+        return;
+      }
+      var oldPath = handle.__path;
+      var ext = it.type === 'note' ? ((/\.[^.\\/]+$/.exec(oldPath) || ['','.md'])[1]) : '';
+      var newPath = String(parentHandle.__path).replace(/[\\/]+$/, '') + '\\' + safeName(newName) + ext;
+      try {
+        await window.__grafitDesktop.rename(oldPath, newPath);
+        var descendants = [it].concat(descendantsOf(it.id));
+        descendants.forEach(function (entry) {
+          var oldHandle = disk.handles.get(entry.id);
+          if (!oldHandle || !oldHandle.__path) return;
+          var oldEntryPath = String(oldHandle.__path);
+          var suffix = oldEntryPath.slice(oldPath.length);
+          var nextPath = entry.id === it.id ? newPath : newPath + suffix;
+          disk.handles.set(entry.id, window.__grafitDesktop.makeHandle(nextPath, entry.type));
+        });
+        var historyPrefix = 'disk:' + String(oldPath).toLowerCase();
+        Object.keys(noteHistory).forEach(function (key) {
+          if (key.indexOf(historyPrefix) !== 0) return;
+          var nextKey = 'disk:' + String(newPath).toLowerCase() + key.slice(historyPrefix.length);
+          noteHistory[nextKey] = noteHistory[key];
+          delete noteHistory[key];
+        });
+        saveHistory();
+      } catch (e) {
+        toast('Не удалось переименовать на диске: ' + (e && e.message ? e.message : e), 'error');
+        return;
+      }
+    }
     it.name = newName;
     it.updated = Date.now();
     if (it.type === 'note') {
       updateWikilinks(old, newName);
       markDirty(it.id);
-      if (vaultMode === 'disk') toast('Переименовано. Имя файла на диске не изменилось — при необходимости переименуйте его в проводнике.', 'ok');
-      else toast('Переименовано в «' + newName + '»', 'ok');
+      toast('Переименовано в «' + newName + '»', 'ok');
     } else {
       toast('Папка переименована', 'ok');
     }
@@ -1698,9 +1835,21 @@
 
     var items = [it].concat(kids);
     if (vaultMode === 'disk') {
+      try {
+        var diskHandle = disk.handles.get(it.id);
+        var diskParent = it.parent ? disk.handles.get(it.parent) : disk.root;
+        if (diskHandle && typeof diskHandle.remove === 'function') {
+          await diskHandle.remove();
+        } else if (diskParent && typeof diskParent.removeEntry === 'function') {
+          await diskParent.removeEntry(diskHandle ? diskHandle.name : safeName(it.name) + (it.type === 'note' ? '.md' : ''), { recursive: it.type === 'folder' });
+        } else {
+          throw new Error('папка не поддерживает удаление');
+        }
+      } catch (e) {
+        toast('Не удалось удалить с диска: ' + (e && e.message ? e.message : e), 'error');
+        return;
+      }
       items.forEach(function (x) {
-        var h = disk.handles.get(x.id);
-        if (h && typeof h.remove === 'function') { h.remove().catch(function () {}); }
         if (disk.handles.delete) disk.handles.delete(x.id);
         delete vault.items[x.id];
         delete dirty[x.id];
@@ -2018,10 +2167,46 @@
         return '<span class="tag" data-tag="' + escapeHtml(t) + '">#' + escapeHtml(t) + '</span>';
       }).join('') + '</div>';
     }
+    var versions = historyEntries(note);
+    if (versions.length) {
+      html += '<div class="history-head">Предыдущие версии (' + versions.length + ')</div>';
+      versions.slice(0, 5).forEach(function (entry, index) {
+        html += '<button class="history-item" type="button" data-history="' + index + '">'
+          + escapeHtml(fmtDate(entry.at)) + '</button>';
+      });
+    }
     el.innerHTML = html;
     $$('.tag', el).forEach(function (sp) {
       sp.addEventListener('click', function () { showTag(sp.getAttribute('data-tag')); });
     });
+    $$('.history-item', el).forEach(function (btn) {
+      btn.addEventListener('click', function () { restoreHistoryVersion(note.id, Number(btn.getAttribute('data-history'))); });
+    });
+  }
+
+  async function restoreHistoryVersion(id, index) {
+    var note = getItem(id);
+    var entries = historyEntries(note);
+    var entry = entries[index];
+    if (!note || !entry) return;
+    var ok = await gdConfirm({
+      title: 'Восстановить версию?',
+      lines: ['Текущий текст будет сохранён в историю, чтобы его можно было вернуть.'],
+      okLabel: 'Восстановить'
+    });
+    if (!ok) return;
+    captureHistory(note);
+    note.content = entry.content;
+    note.updated = Date.now();
+    markDirty(note.id);
+    persist();
+    if (note.id === currentId && ED) ED.setValue(note.content);
+    renderPreview();
+    renderOutline();
+    renderBacklinks();
+    renderMeta();
+    updateStatus();
+    toast('Версия восстановлена', 'ok');
   }
 
   function updateStatus() {
@@ -2101,7 +2286,9 @@
       if (!note) return;
       toast('Ввод сохранён в заметку «' + note.name + '»', 'error');
     }
-    note.content = ED.getValue();
+    var nextContent = ED.getValue();
+    if (nextContent !== note.content) maybeCaptureHistory(note);
+    note.content = nextContent;
     note.updated = Date.now();
     markDirty(note.id);
     persist();
@@ -3005,6 +3192,7 @@
   function boot() {
     try { applyTheme(localStorage.getItem(LS_THEME) || 'dark'); } catch (e) { applyTheme('dark'); }
     if (!loadLocal()) seedVault();
+    loadHistory();
     loadAiCfg();
     bindUI();
     renderTree();
